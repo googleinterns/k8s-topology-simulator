@@ -1,6 +1,6 @@
 package main
 
-import "modeling/modeling"
+import "github.com/googleinterns/k8s-topology-simulator/modeling"
 
 func main() {
 	zoneA := modeling.Zone{Nodes: 30, Endpoints: 60, Name: "a"}

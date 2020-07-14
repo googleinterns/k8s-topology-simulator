@@ -5,19 +5,24 @@ import (
 	"fmt"
 )
 
+// slicecapacity is the number of max endpoints per slice
 type Model struct {
-	zones      []Zone
-	slices     []Endpointslice
-	lastResult Stat
-	alg        RoutingAlgorithm
-	simulator  TrafficSimulator
+	zones         []Zone
+	slices        []Endpointslice
+	sliceCapacity uint
+	lastResult    Stat
+	alg           RoutingAlgorithm
+	simulator     TrafficSimulator
 }
 
+// Create a model with zones, routing algorithm and traffic simulator
+//		Based on the algorithm, create the endpointslices
 func NewModel(zones []Zone, alg RoutingAlgorithm, sim TrafficSimulator) (*Model, error) {
 	model := &Model{
-		zones:     zones,
-		alg:       alg,
-		simulator: sim,
+		zones:         zones,
+		sliceCapacity: 100,
+		alg:           alg,
+		simulator:     sim,
 	}
 	if slices, err := model.alg.CreatingSlices(model.zones); err != nil {
 		panic(err)
@@ -27,6 +32,11 @@ func NewModel(zones []Zone, alg RoutingAlgorithm, sim TrafficSimulator) (*Model,
 	return model, nil
 }
 
+func (m *Model) SetSliceCapacity(newCapacity uint) {
+	m.sliceCapacity = newCapacity
+}
+
+// Start simulation based on the zones and endpointslices
 func (m *Model) StartSimulation() error {
 	if stat, err := m.simulator.Simulate(m.zones, m.slices); err != nil {
 		panic(err)
@@ -36,6 +46,8 @@ func (m *Model) StartSimulation() error {
 	return nil
 }
 
+// Update the algorithm
+//		create the new endpointslices based on the new algorithm
 func (m *Model) UpdateAlgorithm(alg RoutingAlgorithm) error {
 	if alg == nil {
 		return errors.New("Empty algorithm")
@@ -54,8 +66,9 @@ func (m *Model) PrintLastResult() error {
 	for _, zone := range m.zones {
 		totalPods += zone.Endpoints
 	}
+	_, numberOfSlices, _ := m.GetEndpointslices()
 	fmt.Printf("%% in-zone traffic \t %.2f%%\n", m.lastResult.InZoneTraffic*100)
-	fmt.Printf("# of endpoint slices\t %d\n", len(m.slices))
+	fmt.Printf("# of endpoint slices\t %v\n", numberOfSlices)
 	fmt.Printf("# of endpoints\t %d\n", totalPods)
 	fmt.Println("----------------------------------------------")
 
@@ -86,11 +99,19 @@ func (m *Model) GetZones() ([]Zone, error) {
 	return m.zones, nil
 }
 
-func (m *Model) GetEndpointslices() ([]Endpointslice, error) {
+func (m *Model) GetEndpointslices() ([]Endpointslice, uint, error) {
 	if len(m.slices) == 0 {
-		return nil, errors.New("Can't get empty slices")
+		return nil, 0, errors.New("Can't get empty slices")
 	}
-	return m.slices, nil
+	totalSlice := uint(0)
+	for _, slice := range m.slices {
+		pods := slice.numberOfPods()
+		totalSlice += uint(pods) / m.sliceCapacity
+		if uint(pods)%m.sliceCapacity != 0 {
+			totalSlice++
+		}
+	}
+	return m.slices, totalSlice, nil
 }
 
 func (m *Model) GetLastResult() (Stat, error) {
