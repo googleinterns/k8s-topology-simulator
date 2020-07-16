@@ -1,3 +1,19 @@
+/*
+Copyright 2020 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package modeling
 
 import (
@@ -5,79 +21,82 @@ import (
 	"fmt"
 )
 
-// slicecapacity is the number of max endpoints per slice
+// Model wrapper class for the simulation components
 type Model struct {
-	zones         []Zone
-	slices        []Endpointslice
-	sliceCapacity uint
-	lastResult    Stat
-	alg           RoutingAlgorithm
-	simulator     TrafficSimulator
+	slices    map[string]EndpointSliceGroup
+	alg       RoutingAlgorithm
+	simulator TrafficSimulator
+
+	Zones   zoneInfos
+	Results []Stat
+	// number of max endpoints per slice
+	SliceCapacity uint
 }
 
-// Create a model with zones, routing algorithm and traffic simulator
-//		Based on the algorithm, create the endpointslices
+// NewModel creates a model with zones, routing algorithm and traffic simulator
+// and uses the algorithm to create the endpointslicegroups
 func NewModel(zones []Zone, alg RoutingAlgorithm, sim TrafficSimulator) (*Model, error) {
+	zoneInfo, err := createZoneinfos(zones)
+	if err != nil {
+		return nil, err
+	}
 	model := &Model{
-		zones:         zones,
-		sliceCapacity: 100,
+		Zones:         zoneInfo,
+		SliceCapacity: 100,
 		alg:           alg,
 		simulator:     sim,
 	}
-	if slices, err := model.alg.CreatingSlices(model.zones); err != nil {
-		panic(err)
-	} else {
-		model.slices = slices
+	slices, err := model.alg.CreateSlices(model.Zones)
+	if err != nil {
+		return nil, err
 	}
+	model.slices = slices
 	return model, nil
 }
 
-func (m *Model) SetSliceCapacity(newCapacity uint) {
-	m.sliceCapacity = newCapacity
-}
-
-// Start simulation based on the zones and endpointslices
+// StartSimulation based on the zones and endpointslicegroups
 func (m *Model) StartSimulation() error {
-	if stat, err := m.simulator.Simulate(m.zones, m.slices); err != nil {
-		panic(err)
-	} else {
-		m.lastResult = stat
+	stat, err := m.simulator.Simulate(m.Zones, m.slices)
+	if err != nil {
+		return err
 	}
+	m.Results = append(m.Results, stat)
 	return nil
 }
 
-// Update the algorithm
-//		create the new endpointslices based on the new algorithm
+// UpdateAlgorithm updates the algorithm and creates the new
+// endpointslicegroups based on the new algorithm
 func (m *Model) UpdateAlgorithm(alg RoutingAlgorithm) error {
 	if alg == nil {
 		return errors.New("Empty algorithm")
 	}
 	m.alg = alg
-	if slices, err := m.alg.CreatingSlices(m.zones); err != nil {
-		panic(err)
-	} else {
-		m.slices = slices
+	slices, err := m.alg.CreateSlices(m.Zones)
+	if err != nil {
+		return err
 	}
+	m.slices = slices
 	return nil
 }
 
+// PrintLastResult prints the summary of the last simulation result
 func (m *Model) PrintLastResult() error {
-	var totalPods int
-	for _, zone := range m.zones {
-		totalPods += zone.Endpoints
+	_, numberOfSlices, err := m.GetEndpointslices()
+	if err != nil {
+		return err
 	}
-	_, numberOfSlices, _ := m.GetEndpointslices()
-	fmt.Printf("%% in-zone traffic \t %.2f%%\n", m.lastResult.InZoneTraffic*100)
+	lastResult := m.Results[len(m.Results)-1]
+	fmt.Printf("%% in-zone traffic \t %.2f%%\n", lastResult.InZoneTraffic*100)
 	fmt.Printf("# of endpoint slices\t %v\n", numberOfSlices)
-	fmt.Printf("# of endpoints\t %d\n", totalPods)
+	fmt.Printf("# of endpoints\t %d\n", m.Zones.totalEndpoints)
 	fmt.Println("----------------------------------------------")
 
-	for zone, traffic := range m.lastResult.Traffic {
+	for zone, traffic := range lastResult.TrafficDetail {
 		fmt.Printf("Total to %s \t %.f%% \n", zone, traffic.IncomingTraffic*100)
 	}
 	fmt.Println("----------------------------------------------")
 
-	for zone, traffic := range m.lastResult.Traffic {
+	for zone, traffic := range lastResult.TrafficDetail {
 		fmt.Printf("From %s : \n", zone)
 		for z, t := range traffic.OutgoingTraffic {
 			fmt.Printf("\t to %s : %.2f%% \n", z, t*100)
@@ -85,38 +104,27 @@ func (m *Model) PrintLastResult() error {
 	}
 	fmt.Println("----------------------------------------------")
 
-	for zone, workload := range m.lastResult.Workload {
+	for zone, workload := range lastResult.Workload {
 		fmt.Printf("Workload for %s : \t %.2f%% \n", zone, workload*100)
 	}
 	return nil
 }
 
-func (m *Model) GetZones() ([]Zone, error) {
-	if len(m.zones) == 0 {
-		// Suppose to be initialized outside, if empty panic!
-		panic(errors.New("Can't get empty zones"))
-	}
-	return m.zones, nil
-}
-
-func (m *Model) GetEndpointslices() ([]Endpointslice, uint, error) {
+// GetEndpointslices gets the created endpoitnslicegroups, number of
+// endpointslices
+func (m *Model) GetEndpointslices() (map[string]EndpointSliceGroup, uint, error) {
 	if len(m.slices) == 0 {
-		return nil, 0, errors.New("Can't get empty slices")
+		// To avoid the situation m.slices is not nil but is empty, intentionally
+		// return the nil for the first value
+		return nil, 0, nil
 	}
 	totalSlice := uint(0)
 	for _, slice := range m.slices {
 		pods := slice.numberOfPods()
-		totalSlice += uint(pods) / m.sliceCapacity
-		if uint(pods)%m.sliceCapacity != 0 {
+		totalSlice += uint(pods) / m.SliceCapacity
+		if uint(pods)%m.SliceCapacity != 0 {
 			totalSlice++
 		}
 	}
 	return m.slices, totalSlice, nil
-}
-
-func (m *Model) GetLastResult() (Stat, error) {
-	if m.lastResult.Traffic == nil {
-		return m.lastResult, errors.New("No stats yet, run simulation first")
-	}
-	return m.lastResult, nil
 }
