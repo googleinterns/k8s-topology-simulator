@@ -85,8 +85,10 @@ func (e EndpointSliceGroup) numberOfPods() int {
 }
 
 func createZoneinfos(zones []Zone) (zoneInfos, error) {
+	if len(zones) == 0 {
+		return zoneInfos{}, errors.New("Creating zoneinfos with zero length []Zone")
+	}
 	var totalPods, totalNodes int
-
 	zoneInfo := zoneInfos{zoneDetails: make(map[string]Zone)}
 	for _, zone := range zones {
 		if zone.Endpoints <= 0 || zone.Nodes <= 0 {

@@ -16,12 +16,17 @@ limitations under the License.
 
 package modeling
 
-// TheoreticalSimulator calculated the theoretical probability of the traffic
+import "errors"
+
+// TheoreticalSimulator calculates the theoretical probability of the traffic
 // distribution
 type TheoreticalSimulator struct{}
 
 // Simulate calculates the theoretical distribution of the traffic
 func (sim TheoreticalSimulator) Simulate(zones zoneInfos, endpointSlices map[string]EndpointSliceGroup) (Stat, error) {
+	if len(zones.zoneDetails) == 0 || len(endpointSlices) == 0 {
+		return Stat{}, errors.New("Can't evaluate probability based on empty zones or endpointslices")
+	}
 	// kube-proxy calculation, zones name - endpoints in potential destination sclies
 	kubeProxy := make(map[string]map[string]float64)
 	for name := range zones.zoneDetails {

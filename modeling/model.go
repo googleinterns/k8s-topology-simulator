@@ -40,6 +40,9 @@ func NewModel(zones []Zone, alg RoutingAlgorithm, sim TrafficSimulator) (*Model,
 	if err != nil {
 		return nil, err
 	}
+	if alg == nil || sim == nil {
+		return nil, errors.New("Can't create model with nil algorithm or simulator")
+	}
 	model := &Model{
 		Zones:         zoneInfo,
 		SliceCapacity: 100,
@@ -66,6 +69,7 @@ func (m *Model) StartSimulation() error {
 
 // UpdateAlgorithm updates the algorithm and creates the new
 // endpointslicegroups based on the new algorithm
+// TODO: should we erase the previous results?
 func (m *Model) UpdateAlgorithm(alg RoutingAlgorithm) error {
 	if alg == nil {
 		return errors.New("Empty algorithm")

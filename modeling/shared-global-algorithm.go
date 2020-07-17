@@ -95,7 +95,7 @@ func (alg SharedGlobalAlgorithm) CreateSlices(zones zoneInfos) (map[string]Endpo
 // the global endpointslice
 func CreateAlg(weight float64, threshold int) (SharedGlobalAlgorithm, error) {
 	if weight < 0 || threshold < 0 {
-		return SharedGlobalAlgorithm{}, errors.New("Invalid weight/threshold values to init algorihtm")
+		return SharedGlobalAlgorithm{}, errors.New("Invalid weight/threshold values to init algorithm")
 	}
 	alg := SharedGlobalAlgorithm{globalWeight: weight, globalThreshold: threshold}
 	return alg, nil
