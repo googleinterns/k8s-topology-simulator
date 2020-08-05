@@ -25,9 +25,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/googleinterns/k8s-topology-simulator/modeling"
+	"k8s.io/klog/v2"
 )
 
 func main() {
@@ -38,29 +38,21 @@ func main() {
 	// output file, default alg_result.csv
 	outputPtr := flag.String("output", "example/output.csv", "output of this algorithm")
 	flag.Parse()
+	klog.InitFlags(nil)
 
-	var errList []<-chan error
-
-	zoneNames, inputQueue, errC, err := parseInput(*inputPtr)
+	inputArray, err := parseInput(*inputPtr)
 	errorHandler(err)
-	errList = append(errList, errC)
 
-	outputQueue, errC, err := startSimulation(*algPtr, inputQueue)
+	outputArray, err := startSimulation(*algPtr, inputArray)
 	errorHandler(err)
-	errList = append(errList, errC)
 
-	errC, err = parseResult(*outputPtr, zoneNames, outputQueue)
-	errorHandler(err)
-	errList = append(errList, errC)
-
-	// wait for goroutines to return
-	err = waitForSimulation(errList...)
+	err = parseResult(*outputPtr, outputArray)
 	errorHandler(err)
 }
 
 func errorHandler(err error) {
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
+		klog.Errorf("%v\n", err)
 		os.Exit(1)
 	}
 }
@@ -81,123 +73,110 @@ type outputData struct {
 	result modeling.SimulationResult
 }
 
-// paserInput parses input csv file to instances of inputData and puts them into
-// a queue
-func parseInput(file string) ([]string, <-chan inputData, <-chan error, error) {
+// paserInput parses input csv file to instances of inputData and returns a
+// slice of them
+func parseInput(file string) ([]inputData, error) {
 	inputFile, err := os.Open(filepath.Join("", filepath.Clean(file)))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
-	fmt.Printf("Reading data from %v\n", file)
+	klog.Infof("Reading data from %v\n", file)
 	reader := csv.NewReader(inputFile)
 	reader.TrimLeadingSpace = true
 	line, err := reader.Read()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	var zoneNames []string
 	for _, name := range line[1:] {
 		name = strings.TrimSpace(name)
 		zoneNames = append(zoneNames, name)
 	}
-	dataC := make(chan inputData)
-	errC := make(chan error, 1)
-
-	go func() {
-		defer close(dataC)
-		defer close(errC)
-		for {
-			// read one row
-			rowCells, err := reader.Read()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				errC <- err
-				return
-			}
-			if len(rowCells) != len(zoneNames)+1 {
-				fmt.Printf("[WARNING] unmatched number of fields, skip data %v\n", rowCells)
-				continue
-			}
-			var rowData inputData
-			rowData.name = rowCells[0]
-			for index, data := range rowCells[1:] {
-				nodestr := strings.Fields(data)
-				// convert string to int. number of nodes in a zone
-				numNode, err := strconv.Atoi(nodestr[0])
-				if err != nil {
-					errC <- err
-					return
-				}
-				// convert string to int. number of endpoints in a zone
-				numEndpoints, err := strconv.Atoi(nodestr[1])
-				if err != nil {
-					errC <- err
-					return
-				}
-				rowData.zones = append(rowData.zones, modeling.Zone{
-					Nodes:     numNode,
-					Endpoints: numEndpoints,
-					Name:      zoneNames[index],
-				})
-			}
-			dataC <- rowData
+	var dataArray []inputData
+	for {
+		var data inputData
+		var done bool
+		data, done, err = readOneRow(zoneNames, reader)
+		if done {
+			break
 		}
-	}()
+		if err != nil {
+			klog.Infof("can't parse input data: %v, skip to next row\n", data.name)
+			continue
+		}
+		dataArray = append(dataArray, data)
+	}
+	return dataArray, err
+}
 
-	return zoneNames, dataC, errC, nil
+// parse one row of input file to one instance of inputData
+func readOneRow(zoneNames []string, reader *csv.Reader) (inputData, bool, error) {
+	rowCells, err := reader.Read()
+	if err == io.EOF {
+		return inputData{}, true, nil
+	}
+	if err != nil {
+		return inputData{}, true, err
+	}
+	var rowData inputData
+	rowData.name = rowCells[0]
+	for index, data := range rowCells[1:] {
+		nodestr := strings.Fields(data)
+		// convert string to int. number of nodes in a zone
+		numNode, err := strconv.Atoi(nodestr[0])
+		if err != nil {
+			return rowData, false, err
+		}
+		// convert string to int. number of endpoints in a zone
+		numEndpoints, err := strconv.Atoi(nodestr[1])
+		if err != nil {
+			return rowData, false, err
+		}
+		rowData.zones = append(rowData.zones, modeling.Zone{
+			Nodes:     numNode,
+			Endpoints: numEndpoints,
+			Name:      zoneNames[index],
+		})
+	}
+	return rowData, false, nil
 }
 
 // startSimulation processes simulation on input data, produces instances of
-// outputData structure and puts them in a queue
-func startSimulation(algName string, inputQueue <-chan inputData) (<-chan outputData, <-chan error, error) {
+// outputData structure and returns a slice of them
+func startSimulation(algName string, inputArray []inputData) ([]outputData, error) {
 	// create algrithm based on the algorithm name delivered by the flag
 	alg := modeling.NewAlgorithm(algName)
 	// create simulation model, currently do calculation based on probability
 	// rather than real simulation.
 	model, err := modeling.NewModel(alg, modeling.TheoreticalSimulator{})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
+	}
+	var outputArray []outputData
+	for _, rowData := range inputArray {
+		err := model.UpdateRegion(rowData.zones)
+		if err != nil {
+			return outputArray, fmt.Errorf("input name : %s, %v", rowData.name, err)
+		}
+		simRes, err := model.StartSimulation()
+		if err != nil {
+			return outputArray, fmt.Errorf("input name : %s, %v", rowData.name, err)
+		}
+		var result outputData
+		result.name = rowData.name
+		result.result = simRes
+		outputArray = append(outputArray, result)
 	}
 
-	resultC := make(chan outputData)
-	errC := make(chan error, 1)
-
-	go func() {
-		defer close(resultC)
-		defer close(errC)
-		for {
-			rowData, more := <-inputQueue
-			if !more {
-				break
-			}
-			err := model.UpdateRegion(rowData.zones)
-			if err != nil {
-				errC <- fmt.Errorf("input id : %s, %v", rowData.name, err)
-				return
-			}
-			simRes, err := model.StartSimulation()
-			if err != nil {
-				errC <- fmt.Errorf("input id : %s, %v", rowData.name, err)
-				return
-			}
-			var result outputData
-			result.name = rowData.name
-			result.result = simRes
-			resultC <- result
-		}
-	}()
-
-	return resultC, errC, nil
+	return outputArray, nil
 }
 
 // parseResult parses outputData to evaluation metrics and writes back to a
 // result file
-func parseResult(file string, zoneNames []string, outputQueue <-chan outputData) (<-chan error, error) {
+func parseResult(file string, outputArray []outputData) (err error) {
 	outputFile, err := os.Create(file)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() {
 		cerr := outputFile.Close()
@@ -205,22 +184,17 @@ func parseResult(file string, zoneNames []string, outputQueue <-chan outputData)
 			err = cerr
 		}
 	}()
-	fmt.Printf("Creating output to file %v\n", file)
+
+	klog.Infof("Creating output to file %v\n", file)
 	writer := csv.NewWriter(outputFile)
 
-	title := []string{"input id", "score", "in-zone-traffic score", "deviation score", "max deviation", "mean deviation", "SD of deviation"}
+	title := []string{"input name", "score", "in-zone-traffic score", "deviation score", "max deviation", "mean deviation", "SD of deviation"}
 	err = writer.Write(title)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	errC := make(chan error, 1)
-	defer close(errC)
-	for {
-		rowData, more := <-outputQueue
-		if !more {
-			break
-		}
 
+	for _, rowData := range outputArray {
 		// use in zone traffic percentage to be in zone traffic score
 		inZoneTrafficScore := rowData.result.InZoneTraffic * 100
 		// use mean deviation to calcualte deviation score
@@ -238,47 +212,10 @@ func parseResult(file string, zoneNames []string, outputQueue <-chan outputData)
 
 		err = writer.Write(data)
 		if err != nil {
-			return errC, err
+			return err
 		}
 	}
 	writer.Flush()
 	err = writer.Error()
-	if err != nil {
-		return errC, err
-	}
-	return errC, nil
-}
-
-// waitForSimulation waits for above routings return and handle their errors
-func waitForSimulation(errs ...<-chan error) error {
-	errC := mergeErrors(errs...)
-	for err := range errC {
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// mergeErrors handles errors in the goroutines
-func mergeErrors(errs ...<-chan error) <-chan error {
-	var wg sync.WaitGroup
-	outC := make(chan error, len(errs))
-	output := func(c <-chan error) {
-		for err := range c {
-			outC <- err
-		}
-		wg.Done()
-	}
-	wg.Add(len(errs))
-
-	for _, errC := range errs {
-		go output(errC)
-	}
-
-	go func() {
-		wg.Wait()
-		close(outC)
-	}()
-	return outC
+	return err
 }

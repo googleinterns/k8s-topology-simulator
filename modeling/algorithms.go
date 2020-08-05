@@ -16,20 +16,18 @@ limitations under the License.
 
 package modeling
 
-import (
-	"fmt"
-)
+import "k8s.io/klog/v2"
 
 // NewAlgorithm serves as an algorithm constructor based on the algroithm name
 func NewAlgorithm(name string) RoutingAlgorithm {
 	switch name {
 	case "SharedGlobal", "SharedGlobalAlgorithm":
-		fmt.Printf("SharedGlobalAlgorithm created\n")
+		klog.Info("SharedGlobalAlgorithm created")
 		return SharedGlobalAlgorithm{globalWeight: 0.4, globalThreshold: 100}
 	case "Local", "LocalAlgorithm", "LocalSliceAlgorithm":
-		fmt.Printf("LocalSliceAlgorithm created\n")
+		klog.Info("LocalSliceAlgorithm created")
 		return LocalSliceAlgorithm{}
 	}
-	fmt.Printf("[WARNINIG] unknown algorithm %v, return LocalSliceAlgorithm as default\n", name)
+	klog.Warningf("[WARNINIG] unknown algorithm %v, return LocalSliceAlgorithm as default\n", name)
 	return LocalSliceAlgorithm{}
 }
