@@ -28,7 +28,7 @@ type Model struct {
 	region    regionInfo
 
 	// SliceCapacity is the number of max endpoints per slice
-	SliceCapacity uint
+	SliceCapacity int
 }
 
 // NewModel creates a model with routing algorithm and traffic simulator
@@ -66,14 +66,19 @@ func (m *Model) StartSimulation() (SimulationResult, error) {
 }
 
 // GetNumberOfEndpointSlices returns the number of EndpointSlices
-func (m *Model) GetNumberOfEndpointSlices() uint {
-	totalSlices := uint(0)
+func (m *Model) GetNumberOfEndpointSlices() int {
+	totalSlices := 0
 	for _, slice := range m.slices {
-		pods := slice.numberOfEndpoints()
-		totalSlices += uint(pods) / m.SliceCapacity
-		if uint(pods)%m.SliceCapacity != 0 {
+		endpoints := slice.numberOfEndpoints()
+		totalSlices += endpoints / m.SliceCapacity
+		if endpoints%m.SliceCapacity != 0 {
 			totalSlices++
 		}
 	}
 	return totalSlices
+}
+
+// GetNumberOfEndpoints returns the number of total endpoints
+func (m *Model) GetNumberOfEndpoints() int {
+	return m.region.totalEndpoints
 }

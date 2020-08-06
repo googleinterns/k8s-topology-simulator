@@ -1,0 +1,19 @@
+input name,score,in-zone-traffic score,deviation score,slice score,max deviation,mean deviation,SD of deviation
+2 zones with no endpoints,66.6667,33.3333,100.0000,100.0000,0.0000%,0.0000%,0.0000
+1 zone with no endpoints,58.0174,40.1279,93.1783,50.0000,20.0639%,6.8217%,0.1136
+2 zones with few endpoints,64.6667,46.6667,93.3333,66.6667,20.0000%,6.6667%,0.1116
+balanced minimal endpoints,66.6667,33.3333,100.0000,100.0000,0.0000%,0.0000%,0.0000
+unbalanced minimal endpoints,66.6667,33.3333,100.0000,100.0000,0.0000%,0.0000%,0.0000
+only 1 endpoint,66.6667,33.3333,100.0000,100.0000,0.0000%,0.0000%,0.0000
+somewhat balanced small,66.6667,33.3333,100.0000,100.0000,0.0000%,0.0000%,0.0000
+somewhat balanced medium,66.6667,33.3333,100.0000,100.0000,0.0000%,0.0000%,0.0000
+somewhat balanced large,85.9462,94.8553,95.0617,50.0000,18.6933%,4.9383%,0.0838
+somewhat balanced huge,92.4124,91.6893,94.6199,90.9091,17.7629%,5.3801%,0.0935
+balanced endpoints - uneven nodes,67.9012,35.8025,100.0000,100.0000,0.0000%,0.0000%,0.0000
+unbalanced endpoints - uneven nodes,70.6607,71.9505,82.2848,50.0000,31.7194%,17.7152%,0.2640
+mostly balanced small - uneven nodes,65.7143,31.4286,100.0000,100.0000,0.0000%,0.0000%,0.0000
+mostly balanced medium - uneven nodes,67.6372,35.2744,100.0000,100.0000,0.0000%,0.0000%,0.0000
+mostly balanced large - uneven nodes,89.7141,97.1575,97.1177,60.0000,19.0030%,2.8823%,0.0547
+perfectly balanced small,69.4444,38.8889,100.0000,100.0000,0.0000%,0.0000%,0.0000
+perfectly balanced medium,66.7585,33.5170,100.0000,100.0000,0.0000%,0.0000%,0.0000
+perfectly balanced large,96.0000,100.0000,100.0000,80.0000,0.0000%,0.0000%,0.0000
