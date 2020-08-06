@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -29,6 +30,9 @@ import (
 	"github.com/googleinterns/k8s-topology-simulator/modeling"
 	"k8s.io/klog/v2"
 )
+
+const endpointsPerSlice = 100
+const inZoneTrafficScoreWeight, deviationScoreWeight, sliceScoreWeight = 0.5, 0.3, 0.2
 
 func main() {
 	// algorithm name, default shared global
@@ -69,6 +73,10 @@ type inputData struct {
 type outputData struct {
 	// same id as input id
 	name string
+	// number of endpoints associated with the input data
+	endpoints int
+	// number of EndpointSlices associated with the input data
+	endpointSlices int
 	// simulation result of that piece of input data
 	result modeling.SimulationResult
 }
@@ -152,6 +160,7 @@ func startSimulation(algName string, inputArray []inputData) ([]outputData, erro
 	if err != nil {
 		return nil, err
 	}
+	model.SliceCapacity = endpointsPerSlice
 	var outputArray []outputData
 	for _, rowData := range inputArray {
 		err := model.UpdateRegion(rowData.zones)
@@ -162,7 +171,11 @@ func startSimulation(algName string, inputArray []inputData) ([]outputData, erro
 		if err != nil {
 			return outputArray, fmt.Errorf("error starting simulation for input : %s, %v", rowData.name, err)
 		}
-		outputArray = append(outputArray, outputData{name: rowData.name, result: simRes})
+		outputArray = append(outputArray, outputData{name: rowData.name,
+			endpoints:      model.GetNumberOfEndpoints(),
+			endpointSlices: model.GetNumberOfEndpointSlices(),
+			result:         simRes,
+		})
 	}
 
 	return outputArray, nil
@@ -185,7 +198,7 @@ func parseResult(file string, outputArray []outputData) (err error) {
 	klog.Infof("Writing output to file %v\n", file)
 	writer := csv.NewWriter(outputFile)
 
-	title := []string{"input name", "score", "in-zone-traffic score", "deviation score", "max deviation", "mean deviation", "SD of deviation"}
+	title := []string{"input name", "score", "in-zone-traffic score", "deviation score", "slice score", "max deviation", "mean deviation", "SD of deviation"}
 	err = writer.Write(title)
 	if err != nil {
 		return err
@@ -196,13 +209,17 @@ func parseResult(file string, outputArray []outputData) (err error) {
 		inZoneTrafficScore := rowData.result.InZoneTraffic * 100
 		// use mean deviation to calcualte deviation score
 		deviationScore := 100.0 - rowData.result.MeanDeviation*100
+		// use number of EndpointSlices deviation to calculate sliceScore
+		numberOfOriginalSlices := math.Ceil(float64(rowData.endpoints) / endpointsPerSlice)
+		sliceScore := (numberOfOriginalSlices / float64(rowData.endpointSlices)) * 100
 		// calculate total score based on two scores above
-		totalScore := 0.6*inZoneTrafficScore + 0.4*deviationScore
+		totalScore := inZoneTrafficScoreWeight*inZoneTrafficScore + deviationScoreWeight*deviationScore + sliceScoreWeight*sliceScore
 
 		data := []string{rowData.name}
 		data = append(data, strconv.FormatFloat(totalScore, 'f', 4, 64))
 		data = append(data, strconv.FormatFloat(inZoneTrafficScore, 'f', 4, 64))
 		data = append(data, strconv.FormatFloat(deviationScore, 'f', 4, 64))
+		data = append(data, strconv.FormatFloat(sliceScore, 'f', 4, 64))
 		data = append(data, strconv.FormatFloat(rowData.result.MaxDeviation*100, 'f', 4, 64)+"%")
 		data = append(data, strconv.FormatFloat(rowData.result.MeanDeviation*100, 'f', 4, 64)+"%")
 		data = append(data, strconv.FormatFloat(rowData.result.DeviationSD, 'f', 4, 64))
