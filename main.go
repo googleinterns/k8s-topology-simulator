@@ -41,16 +41,16 @@ func main() {
 	klog.InitFlags(nil)
 
 	inputArray, err := parseInput(*inputPtr)
-	errorHandler(err)
+	exitWithError(err)
 
 	outputArray, err := startSimulation(*algPtr, inputArray)
-	errorHandler(err)
+	exitWithError(err)
 
 	err = parseResult(*outputPtr, outputArray)
-	errorHandler(err)
+	exitWithError(err)
 }
 
-func errorHandler(err error) {
+func exitWithError(err error) {
 	if err != nil {
 		klog.Errorf("%v\n", err)
 		os.Exit(1)
@@ -156,16 +156,13 @@ func startSimulation(algName string, inputArray []inputData) ([]outputData, erro
 	for _, rowData := range inputArray {
 		err := model.UpdateRegion(rowData.zones)
 		if err != nil {
-			return outputArray, fmt.Errorf("input name : %s, %v", rowData.name, err)
+			return outputArray, fmt.Errorf("error updating region for input : %s, %v", rowData.name, err)
 		}
 		simRes, err := model.StartSimulation()
 		if err != nil {
-			return outputArray, fmt.Errorf("input name : %s, %v", rowData.name, err)
+			return outputArray, fmt.Errorf("error starting simulation for input : %s, %v", rowData.name, err)
 		}
-		var result outputData
-		result.name = rowData.name
-		result.result = simRes
-		outputArray = append(outputArray, result)
+		outputArray = append(outputArray, outputData{name: rowData.name, result: simRes})
 	}
 
 	return outputArray, nil
@@ -185,7 +182,7 @@ func parseResult(file string, outputArray []outputData) (err error) {
 		}
 	}()
 
-	klog.Infof("Creating output to file %v\n", file)
+	klog.Infof("Writing output to file %v\n", file)
 	writer := csv.NewWriter(outputFile)
 
 	title := []string{"input name", "score", "in-zone-traffic score", "deviation score", "max deviation", "mean deviation", "SD of deviation"}

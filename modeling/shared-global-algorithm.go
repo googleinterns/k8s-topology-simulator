@@ -71,6 +71,9 @@ func (alg SharedGlobalAlgorithm) CreateSliceGroups(region regionInfo) (map[strin
 		} else {
 			// Otherwise calculate the global contribution of current zone based
 			// on the global weight and the deviation of this zone
+			// If deviation > 0, this zone has more endpoints compared to the
+			// ratio of nodes. It should contribute the extra endpoints to the
+			// global sliceGroup with the weight counted.
 			globalEndpoints.number = int(math.Min(math.Max(0.0, deviation[name])/alg.globalWeight, float64(zone.Endpoints)))
 			globalEndpoints.weight = 1
 		}

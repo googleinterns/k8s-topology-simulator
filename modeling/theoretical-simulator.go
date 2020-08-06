@@ -97,9 +97,9 @@ func (zd zoneSGDetails) getEndpointsTrafficLoadDetails(region regionInfo, endpoi
 		}
 	}
 
-	// theoratially, traffic should be distributed equally among all the
+	// theoretically, traffic should be distributed equally among all the
 	// endpoints
-	theoretialTrafficLoad := 1.0 / float64(region.totalEndpoints)
+	theoreticalTrafficLoad := 1.0 / float64(region.totalEndpoints)
 
 	for zone, sgDetails := range zd {
 		sgDetails.endpointsTrafficLoad = map[string]float64{}
@@ -114,7 +114,7 @@ func (zd zoneSGDetails) getEndpointsTrafficLoadDetails(region regionInfo, endpoi
 			// traffic * zone ratio in this sliceGroup
 			trafficLoad := sgTrafficRatio[label] * zoneRatioInSG / float64(sliceGroup.Composition[zone].number)
 			sgDetails.endpointsTrafficLoad[label] = trafficLoad
-			sgDetails.endpointsTrafficLoadDeviation[label] = trafficLoad/theoretialTrafficLoad - 1.0
+			sgDetails.endpointsTrafficLoadDeviation[label] = trafficLoad/theoreticalTrafficLoad - 1.0
 		}
 		zd[zone] = sgDetails
 	}

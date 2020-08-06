@@ -57,8 +57,8 @@ type SimulationResult struct {
 	MaxDeviation float64
 	// MeanDeviation of traffic load of all endpoints
 	MeanDeviation float64
-	// DeviationSD abbr of standard deviation of the daviation of traffic load
-	// of all endpoints
+	// DeviationSD represents the standard deviation of the daviation of traffic
+	// load across all endpoints
 	DeviationSD float64
 }
 
@@ -136,21 +136,29 @@ func createRegionInfo(zones []Zone) (regionInfo, error) {
 	if len(zones) == 0 {
 		return regionInfo{}, errors.New("creating zoneinfos with zero length []Zone")
 	}
-	var totalPods, totalNodes int
+	var totalEndpoints, totalNodes int
 
 	region := regionInfo{zoneDetails: make(map[string]Zone)}
 	for _, zone := range zones {
-		if zone.Endpoints <= 0 || zone.Nodes <= 0 {
-			return regionInfo{}, errors.New("invalid zones with number of nodes or endpoints <= 0")
+		if zone.Endpoints < 0 || zone.Nodes < 0 {
+			return regionInfo{}, errors.New("invalid zones with number of nodes or endpoints < 0")
 		}
-		totalPods += zone.Endpoints
+		totalEndpoints += zone.Endpoints
 		totalNodes += zone.Nodes
 	}
-	region.totalEndpoints = totalPods
+	region.totalEndpoints = totalEndpoints
 	region.totalNodes = totalNodes
 	for _, zone := range zones {
-		zone.endpointsRatio = float64(zone.Endpoints) / float64(totalPods)
-		zone.nodesRatio = float64(zone.Nodes) / float64(totalNodes)
+		if totalEndpoints == 0 {
+			zone.endpointsRatio = 0
+		} else {
+			zone.endpointsRatio = float64(zone.Endpoints) / float64(totalEndpoints)
+		}
+		if totalNodes == 0 {
+			zone.nodesRatio = 0
+		} else {
+			zone.nodesRatio = float64(zone.Nodes) / float64(totalNodes)
+		}
 		region.zoneDetails[zone.Name] = zone
 	}
 	return region, nil
