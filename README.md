@@ -11,3 +11,22 @@ Kubernetes. This specific project will include:
 * Writing a report that summarizes the different approaches that can be used for
   topology aware routing along with a recommendation.
 
+## Usage
+go run main.go -input=inputFile -output=outputFile -alg=algorithm
+
+example of intput file (csv): each zone with number of nodes first, number of endpoints next
+```
+input name, zone1, zone2, zone3  
+perfect input, 10 10, 10 10, 20 20
+```
+
+## Interfaces
+1. Implement algorithms comply with the `RoutingAlgorithm` interface.
+```
+type RoutingAlgorithm struct {
+    // CreateSliceGroups translates regionInfo into EndpointSliceGroups
+    CreateSliceGroups(regionInfo) (map[string]EndpointSliceGroup, error)
+}
+```
+
+2. Add an entry of the algorithm to `NewAlgorithm(name string) RoutingAlgorithm` introduced in algorithms.go
