@@ -32,15 +32,6 @@ type Zone struct {
 	nodesRatio float64
 }
 
-type regionInfo struct {
-	// Total number of nodes of all zones
-	totalNodes int
-	// Total number of endpoints of all zones
-	totalEndpoints int
-	// Detailed information of each zone, zone name - exact zone
-	zoneDetails map[string]Zone
-}
-
 // EndpointSliceGroup represents all the EndpointSlices under a same label, one
 // group may be made up by many EndpointSlices (when the number of endpoints
 // excceeds the capacity of one EndpointSlice). Since for now there is no need
@@ -51,61 +42,123 @@ type EndpointSliceGroup struct {
 	Label string
 	// Composition stores contribution of endpoints in this group from different
 	// zones
-	Composition map[string]int
-	// Weights of endpoints in this group for different zones while routing
-	Weights map[string]float64
-}
-
-// Traffic represents the detailed traffic infomation of a zone
-type Traffic struct {
-	// ZoneName of a specific zone
-	ZoneName string
-	// Incoming traffic that the same zone received
-	Incoming float64
-	// Outgoing traffic distribution of the same zone
-	Outgoing map[string]float64
+	Composition map[string]weightedEndpoints
+	// ZoneTrafficWeights this sliceGroup has for requests from different zones
+	ZoneTrafficWeights map[string]float64
 }
 
 // SimulationResult is to collect metrics of a simulation result
 type SimulationResult struct {
 	// InZoneTraffic is the total ratio of traffic that stays in the same zone
 	InZoneTraffic float64
-	// TrafficDetail groups Traffic by zone name
-	TrafficDetail map[string]Traffic
-	// Workload balance for different zones -- ratio of incoming traffic / ratio
-	// of capacity
-	Workload map[string]float64
+	// TrafficDistribution groups zoneTraffic by zone name
+	TrafficDistribution map[string]zoneTraffic
+	// MaxDeviation of traffic load of all endpoints
+	MaxDeviation float64
+	// MeanDeviation of traffic load of all endpoints
+	MeanDeviation float64
+	// DeviationSD represents the standard deviation of the daviation of traffic
+	// load across all endpoints
+	DeviationSD float64
+}
+
+type regionInfo struct {
+	// total number of nodes of all zones
+	totalNodes int
+	// total number of endpoints of all zones
+	totalEndpoints int
+	// detailed information of each zone, zone name - exact zone
+	zoneDetails map[string]Zone
+}
+
+// endpoints with weights are used to do routing inside an EndpointSliceGroup
+type weightedEndpoints struct {
+	// number of endpoints
+	number int
+	// weights of these endpoints when routing in a slice
+	weight float64
+}
+
+// zoneTraffic records the detailed traffic infomation of a zone
+type zoneTraffic struct {
+	// zoneName of a specific zone
+	zoneName string
+	// incoming traffic this zone received
+	incoming float64
+	// outgoing traffic distribution of this zone
+	outgoing map[string]float64
+	// trafficLoad: ratio between exact traffic received by the zone and its
+	// expected receiving traffic
+	trafficLoad float64
+	// zoneTrafficDetail stores detailed traffic load information for all
+	// endpoints in the zone
+	zoneTrafficDetail endpointsTraffic
+}
+
+// endpointsTraffic stores traffic load details of endpoints in a zone
+type endpointsTraffic struct {
+	// endpointsTrafficLoad for different endpoints belong to a zone in
+	// different sliceGroups
+	// key: sliceGroup label endpoints assigned to
+	endpointsTrafficLoad map[string]float64
+	// endpointsTrafficLoadDeviation for different endpoints belong to a zone
+	// in different sliceGroups
+	// key: sliceGroup label endpoints assigned to
+	endpointsTrafficLoadDeviation map[string]float64
+	// maxDeviationSG (SG:sliceGroup) of endpoints in a zone
+	maxDeviationSG string
+	// meanDeviation of endpoints in a zone
+	meanDeviation float64
 }
 
 // Helper function to calculate number of endpoints of a specific
 // EndpointSliceGroup
-func (e EndpointSliceGroup) numberOfPods() int {
+func (e EndpointSliceGroup) numberOfEndpoints() int {
 	total := 0
-	for _, pods := range e.Composition {
-		total += pods
+	for _, endpoints := range e.Composition {
+		total += endpoints.number
 	}
 	return total
 }
 
+// Helper function to calculate weighted number of endpoints of a specific
+// EndpointSliceGroup
+func (e EndpointSliceGroup) numberOfWeightedEndpoints() float64 {
+	total := 0.0
+	for _, endpoints := range e.Composition {
+		total += float64(endpoints.number) * endpoints.weight
+	}
+	return total
+}
+
+// Helper function to create regionInfo with zone infos
 func createRegionInfo(zones []Zone) (regionInfo, error) {
 	if len(zones) == 0 {
 		return regionInfo{}, errors.New("creating zoneinfos with zero length []Zone")
 	}
-	var totalPods, totalNodes int
+	var totalEndpoints, totalNodes int
 
 	region := regionInfo{zoneDetails: make(map[string]Zone)}
 	for _, zone := range zones {
-		if zone.Endpoints <= 0 || zone.Nodes <= 0 {
-			return regionInfo{}, errors.New("invalid zones with number of nodes or endpoints <= 0")
+		if zone.Endpoints < 0 || zone.Nodes < 0 {
+			return regionInfo{}, errors.New("invalid zones with number of nodes or endpoints < 0")
 		}
-		totalPods += zone.Endpoints
+		totalEndpoints += zone.Endpoints
 		totalNodes += zone.Nodes
 	}
-	region.totalEndpoints = totalPods
+	region.totalEndpoints = totalEndpoints
 	region.totalNodes = totalNodes
 	for _, zone := range zones {
-		zone.endpointsRatio = float64(zone.Endpoints) / float64(totalPods)
-		zone.nodesRatio = float64(zone.Nodes) / float64(totalNodes)
+		if totalEndpoints == 0 {
+			zone.endpointsRatio = 0
+		} else {
+			zone.endpointsRatio = float64(zone.Endpoints) / float64(totalEndpoints)
+		}
+		if totalNodes == 0 {
+			zone.nodesRatio = 0
+		} else {
+			zone.nodesRatio = float64(zone.Nodes) / float64(totalNodes)
+		}
 		region.zoneDetails[zone.Name] = zone
 	}
 	return region, nil

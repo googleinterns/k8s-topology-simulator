@@ -76,10 +76,10 @@ func (alg LocalSliceAlgorithm) CreateSliceGroups(region regionInfo) (map[string]
 		// this local sliceGroup should only receive traffic from current zone,
 		// this map tracks weights of traffic from different zones to this
 		// sliceGroup
-		localGroup.Weights = map[string]float64{zoneName: 1.0}
+		localGroup.ZoneTrafficWeights = map[string]float64{zoneName: 1.0}
 		// this map stores composition of this sliceGroup, zoneName - number of
 		// endpoints from zoneName
-		localGroup.Composition = map[string]int{}
+		localGroup.Composition = map[string]weightedEndpoints{}
 
 		// calculate expected number of endpoints based on the proportion of
 		// nodes in this zone
@@ -90,10 +90,10 @@ func (alg LocalSliceAlgorithm) CreateSliceGroups(region regionInfo) (map[string]
 		deviation := zone.Endpoints - expectedEndpoints
 		if deviation > 0 {
 			endpointsAvailable.push(endpointDeviation{name: zoneName, deviation: deviation})
-			localGroup.Composition[zoneName] = int(expectedEndpoints)
+			localGroup.Composition[zoneName] = weightedEndpoints{number: int(expectedEndpoints), weight: 1}
 		} else {
 			endpointsNeeded.push(endpointDeviation{name: zoneName, deviation: -deviation})
-			localGroup.Composition[zoneName] = zone.Endpoints
+			localGroup.Composition[zoneName] = weightedEndpoints{number: int(zone.Endpoints), weight: 1}
 		}
 
 		sliceGroups[zoneName] = localGroup
@@ -121,17 +121,17 @@ func balanceSliceGroups(endpointsAvailable *endpointsList, endpointsNeeded *endp
 		for index := 0; index < len(endpointsAvailable.byZone); {
 			sendZone := endpointsAvailable.byZone[index]
 			if sendZone.deviation == receiveZone.deviation {
-				sliceGroups[receiveZone.name].Composition[sendZone.name] = sendZone.deviation
+				sliceGroups[receiveZone.name].Composition[sendZone.name] = weightedEndpoints{number: sendZone.deviation, weight: 1}
 				endpointsAvailable.pop()
 				break
 			}
 			if sendZone.deviation > receiveZone.deviation {
-				sliceGroups[receiveZone.name].Composition[sendZone.name] = receiveZone.deviation
+				sliceGroups[receiveZone.name].Composition[sendZone.name] = weightedEndpoints{number: receiveZone.deviation, weight: 1}
 				endpointsAvailable.byZone[index].deviation -= receiveZone.deviation
 				break
 			}
 			if sendZone.deviation < receiveZone.deviation {
-				sliceGroups[receiveZone.name].Composition[sendZone.name] = sendZone.deviation
+				sliceGroups[receiveZone.name].Composition[sendZone.name] = weightedEndpoints{number: sendZone.deviation, weight: 1}
 				receiveZone.deviation -= sendZone.deviation
 				endpointsAvailable.pop()
 				continue
@@ -146,7 +146,11 @@ func balanceSliceGroups(endpointsAvailable *endpointsList, endpointsNeeded *endp
 		// in this case, we assign those extra endpoints to its local
 		// endpointSliceGroups
 		for _, extraEndpoints := range endpointsAvailable.byZone {
-			sliceGroups[extraEndpoints.name].Composition[extraEndpoints.name] += extraEndpoints.deviation
+			originalEndpoints := sliceGroups[extraEndpoints.name].Composition[extraEndpoints.name]
+			sliceGroups[extraEndpoints.name].Composition[extraEndpoints.name] = weightedEndpoints{
+				number: originalEndpoints.number + extraEndpoints.deviation,
+				weight: originalEndpoints.weight,
+			}
 			endpointsAvailable.pop()
 		}
 	}
