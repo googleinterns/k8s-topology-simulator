@@ -14,17 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package modeling
+package algorithm
+
+import "github.com/googleinterns/k8s-topology-simulator/modeling/types"
 
 // RoutingAlgorithm interface for different routing algorithms
 type RoutingAlgorithm interface {
-	// CreateSliceGroups translates regionInfo into EndpointSliceGroups
-	CreateSliceGroups(regionInfo) (map[string]EndpointSliceGroup, error)
-}
-
-// TrafficSimulator interface for different simulators
-type TrafficSimulator interface {
-	// Simulate simulates traffic with the provided regionInfo and
-	// EndpointSliceGroups and returns a SimulationResult.
-	Simulate(regionInfo, map[string]EndpointSliceGroup) (SimulationResult, error)
+	// CreateSliceGroups translates RegionInfo into EndpointSliceGroups
+	CreateSliceGroups(types.RegionInfo) (map[string]types.EndpointSliceGroup, error)
 }

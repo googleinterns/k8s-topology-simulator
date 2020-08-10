@@ -14,11 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package modeling
+package algorithm
 
 import (
 	"errors"
 	"math"
+
+	"github.com/googleinterns/k8s-topology-simulator/modeling/types"
 )
 
 // SharedGlobalAlgorithm takes multiple zones as input and output
@@ -38,55 +40,55 @@ type SharedGlobalAlgorithm struct {
 
 // CreateSliceGroups takes a region of zones as input and output
 // EndpointSliceGroups
-func (alg SharedGlobalAlgorithm) CreateSliceGroups(region regionInfo) (map[string]EndpointSliceGroup, error) {
-	if region.zoneDetails == nil {
+func (alg SharedGlobalAlgorithm) CreateSliceGroups(region types.RegionInfo) (map[string]types.EndpointSliceGroup, error) {
+	if region.ZoneDetails == nil {
 		return nil, errors.New("can't create EndpointSlices with 0 number of zone")
 	}
 	// The deviation for the traffic and capacity above
 	deviation := make(map[string]float64)
 
-	for _, zone := range region.zoneDetails {
+	for _, zone := range region.ZoneDetails {
 		// Calculate the deviation based on the capacity(endpoints) and
 		// traffic(nodes) ratio
-		deviation[zone.Name] = float64(zone.Endpoints) - float64(region.totalEndpoints)*zone.nodesRatio
+		deviation[zone.Name] = float64(zone.Endpoints) - float64(region.TotalEndpoints)*zone.NodesRatio
 	}
 
 	// Output EndpointSlices
-	sliceGroups := make(map[string]EndpointSliceGroup)
+	sliceGroups := make(map[string]types.EndpointSliceGroup)
 	// The global sliceGroup -- might be split into many small global slices
 	// when the number of endpoints > required number of endpoints per
 	// EndpointSlice, i.e. 100 for default. Not be able to divide the big one
 	// into smaller ones that the contributions may vary and there is no need to
 	// do so either.
-	var globalSliceGroup EndpointSliceGroup
+	var globalSliceGroup types.EndpointSliceGroup
 	globalSliceGroup.Label = "global"
-	globalSliceGroup.Composition = make(map[string]weightedEndpoints)
+	globalSliceGroup.Composition = make(map[string]types.WeightedEndpoints)
 	globalSliceGroup.ZoneTrafficWeights = make(map[string]float64)
-	for name, zone := range region.zoneDetails {
-		var globalEndpoints weightedEndpoints
+	for name, zone := range region.ZoneDetails {
+		var globalEndpoints types.WeightedEndpoints
 		// If total pods <= threshold, all pods go to global slice
-		if region.totalEndpoints <= alg.globalThreshold {
-			globalEndpoints.number = zone.Endpoints
-			globalEndpoints.weight = 1
+		if region.TotalEndpoints <= alg.globalThreshold {
+			globalEndpoints.Number = zone.Endpoints
+			globalEndpoints.Weight = 1
 		} else {
 			// Otherwise calculate the global contribution of current zone based
 			// on the global weight and the deviation of this zone
 			// If deviation > 0, this zone has more endpoints compared to the
 			// ratio of nodes. It should contribute the extra endpoints to the
 			// global sliceGroup with the weight counted.
-			globalEndpoints.number = int(math.Min(math.Max(0.0, deviation[name])/alg.globalWeight, float64(zone.Endpoints)))
-			globalEndpoints.weight = 1
+			globalEndpoints.Number = int(math.Min(math.Max(0.0, deviation[name])/alg.globalWeight, float64(zone.Endpoints)))
+			globalEndpoints.Weight = 1
 		}
 
 		globalSliceGroup.Composition[name] = globalEndpoints
 		globalSliceGroup.ZoneTrafficWeights[name] = alg.globalWeight
 
 		// Calculate how many endpoints remain in the local zone
-		var localGroup EndpointSliceGroup
+		var localGroup types.EndpointSliceGroup
 		localGroup.Label = name
-		localGroup.Composition = make(map[string]weightedEndpoints)
+		localGroup.Composition = make(map[string]types.WeightedEndpoints)
 		localGroup.ZoneTrafficWeights = make(map[string]float64)
-		localGroup.Composition[name] = weightedEndpoints{number: zone.Endpoints - globalEndpoints.number, weight: 1}
+		localGroup.Composition[name] = types.WeightedEndpoints{Number: zone.Endpoints - globalEndpoints.Number, Weight: 1}
 		localGroup.ZoneTrafficWeights[name] = 1.0
 
 		sliceGroups[name] = localGroup

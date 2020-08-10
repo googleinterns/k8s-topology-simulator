@@ -25,7 +25,7 @@ perfect input, 10 10, 10 10, 20 20
 ```
 type RoutingAlgorithm struct {
     // CreateSliceGroups translates regionInfo into EndpointSliceGroups
-    CreateSliceGroups(regionInfo) (map[string]EndpointSliceGroup, error)
+    CreateSliceGroups(data.RegionInfo) (map[string]data.EndpointSliceGroup, error)
 }
 ```
 

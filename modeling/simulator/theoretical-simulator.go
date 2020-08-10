@@ -14,11 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package modeling
+package simulator
 
 import (
 	"errors"
 	"math"
+
+	"github.com/googleinterns/k8s-topology-simulator/modeling/types"
 )
 
 // TheoreticalSimulator calculates the theoretical probability of the traffic
@@ -26,13 +28,13 @@ import (
 type TheoreticalSimulator struct{}
 
 // Simulate calculates the theoretical distribution of the traffic
-func (sim TheoreticalSimulator) Simulate(region regionInfo, endpointSlices map[string]EndpointSliceGroup) (SimulationResult, error) {
-	if len(region.zoneDetails) == 0 || len(endpointSlices) == 0 {
-		return SimulationResult{}, errors.New("can't evaluate probability based on empty zones or endpointslices")
+func (sim TheoreticalSimulator) Simulate(region types.RegionInfo, endpointSlices map[string]types.EndpointSliceGroup) (types.SimulationResult, error) {
+	if len(region.ZoneDetails) == 0 || len(endpointSlices) == 0 {
+		return types.SimulationResult{}, errors.New("can't evaluate probability based on empty zones or endpointslices")
 	}
 
 	zoneTrafficDetails := zoneSGDetails{}
-	for zone := range region.zoneDetails {
+	for zone := range region.ZoneDetails {
 		zoneTrafficDetails[zone] = sliceGroupDetails{}
 	}
 
@@ -61,11 +63,11 @@ type sliceGroupDetails struct {
 }
 
 // get reachable endpoints for every zone
-func (zd zoneSGDetails) getReachableEndpoints(endpointSlices map[string]EndpointSliceGroup) {
+func (zd zoneSGDetails) getReachableEndpoints(endpointSlices map[string]types.EndpointSliceGroup) {
 	for zone, sgDetails := range zd {
 		sgDetails.zoneReachableEndpoints = map[string]float64{}
 		for sliceLabel, slice := range endpointSlices {
-			sgDetails.zoneReachableEndpoints[sliceLabel] = float64(slice.numberOfEndpoints()) * slice.ZoneTrafficWeights[zone]
+			sgDetails.zoneReachableEndpoints[sliceLabel] = float64(slice.NumberOfEndpoints()) * slice.ZoneTrafficWeights[zone]
 			sgDetails.zoneReachableEndpointsAll += sgDetails.zoneReachableEndpoints[sliceLabel]
 		}
 		zd[zone] = sgDetails
@@ -88,31 +90,31 @@ func (zd zoneSGDetails) getTraffic() {
 }
 
 // get endpoints traffic load and its deviation in different sliceGroups
-func (zd zoneSGDetails) getEndpointsTrafficLoadDetails(region regionInfo, endpointSlices map[string]EndpointSliceGroup) {
+func (zd zoneSGDetails) getEndpointsTrafficLoadDetails(region types.RegionInfo, endpointSlices map[string]types.EndpointSliceGroup) {
 	// total ratio of traffic received by each EndpointSliceGroup
 	sgTrafficRatio := map[string]float64{}
 	for zone, sgDetails := range zd {
 		for label, trafficRatio := range sgDetails.zoneTrafficRatio {
-			sgTrafficRatio[label] += region.zoneDetails[zone].nodesRatio * trafficRatio
+			sgTrafficRatio[label] += region.ZoneDetails[zone].NodesRatio * trafficRatio
 		}
 	}
 
 	// theoretically, traffic should be distributed equally among all the
 	// endpoints
-	theoreticalTrafficLoad := 1.0 / float64(region.totalEndpoints)
+	theoreticalTrafficLoad := 1.0 / float64(region.TotalEndpoints)
 
 	for zone, sgDetails := range zd {
 		sgDetails.endpointsTrafficLoad = map[string]float64{}
 		sgDetails.endpointsTrafficLoadDeviation = map[string]float64{}
 		for label, sliceGroup := range endpointSlices {
-			if sliceGroup.Composition[zone].number == 0 || sliceGroup.numberOfWeightedEndpoints() == 0 {
+			if sliceGroup.Composition[zone].Number == 0 || sliceGroup.NumberOfWeightedEndpoints() == 0 {
 				continue
 			}
 			// calcualte the ratio of the endpoints in the sliceGroup
-			zoneRatioInSG := float64(sliceGroup.Composition[zone].number) * sliceGroup.Composition[zone].weight / sliceGroup.numberOfWeightedEndpoints()
+			zoneRatioInSG := float64(sliceGroup.Composition[zone].Number) * sliceGroup.Composition[zone].Weight / sliceGroup.NumberOfWeightedEndpoints()
 			// zone endpoints traffic load in this sliceGroup = sliceGroup
 			// traffic * zone ratio in this sliceGroup
-			trafficLoad := sgTrafficRatio[label] * zoneRatioInSG / float64(sliceGroup.Composition[zone].number)
+			trafficLoad := sgTrafficRatio[label] * zoneRatioInSG / float64(sliceGroup.Composition[zone].Number)
 			sgDetails.endpointsTrafficLoad[label] = trafficLoad
 			sgDetails.endpointsTrafficLoadDeviation[label] = trafficLoad/theoreticalTrafficLoad - 1.0
 		}
@@ -121,21 +123,21 @@ func (zd zoneSGDetails) getEndpointsTrafficLoadDetails(region regionInfo, endpoi
 }
 
 // get traffic distribution between zones
-func (zd zoneSGDetails) getZoneToZoneTraffic(region regionInfo, endpointSlices map[string]EndpointSliceGroup) map[string]map[string]float64 {
+func (zd zoneSGDetails) getZoneToZoneTraffic(region types.RegionInfo, endpointSlices map[string]types.EndpointSliceGroup) map[string]map[string]float64 {
 	// ratio of traffic from a zone to other zones
 	zoneTrafficToZone := map[string]map[string]float64{}
-	for oriZone := range region.zoneDetails {
+	for oriZone := range region.ZoneDetails {
 		zoneTrafficToZone[oriZone] = map[string]float64{}
 		for label, sliceGroup := range endpointSlices {
-			if sliceGroup.numberOfWeightedEndpoints() == 0 {
+			if sliceGroup.NumberOfWeightedEndpoints() == 0 {
 				continue
 			}
-			for destZone := range region.zoneDetails {
-				desZoneRatioInSG := float64(sliceGroup.Composition[destZone].number) * sliceGroup.Composition[destZone].weight / sliceGroup.numberOfWeightedEndpoints()
+			for destZone := range region.ZoneDetails {
+				desZoneRatioInSG := float64(sliceGroup.Composition[destZone].Number) * sliceGroup.Composition[destZone].Weight / sliceGroup.NumberOfWeightedEndpoints()
 				// traffic oriZone -> desZone: sum(traffic distribution of
 				// oriZone * traffic ratio from oriZone to this sliceGroup *
 				// desZone ratio in this sliceGroup)
-				zoneTrafficToZone[oriZone][destZone] += region.zoneDetails[oriZone].nodesRatio * zd[oriZone].zoneTrafficRatio[label] * desZoneRatioInSG
+				zoneTrafficToZone[oriZone][destZone] += region.ZoneDetails[oriZone].NodesRatio * zd[oriZone].zoneTrafficRatio[label] * desZoneRatioInSG
 			}
 		}
 	}
@@ -143,23 +145,23 @@ func (zd zoneSGDetails) getZoneToZoneTraffic(region regionInfo, endpointSlices m
 }
 
 // calculate simulation result based on probabilities
-func getSimulationResult(zd zoneSGDetails, region regionInfo, endpointSlices map[string]EndpointSliceGroup, zoneTrafficToZone map[string]map[string]float64) SimulationResult {
+func getSimulationResult(zd zoneSGDetails, region types.RegionInfo, endpointSlices map[string]types.EndpointSliceGroup, zoneTrafficToZone map[string]map[string]float64) types.SimulationResult {
 
 	// calculate result of one simulation
-	var simResult SimulationResult
+	var simResult types.SimulationResult
 	// traffic distribution details by zone
-	simResult.TrafficDistribution = map[string]zoneTraffic{}
+	simResult.TrafficDistribution = map[string]types.ZoneTraffic{}
 
 	var totalDeviation float64
 	var maxDeviation float64
-	for zoneName, zoneInfo := range region.zoneDetails {
+	for zoneName, zoneInfo := range region.ZoneDetails {
 		// zoneX -> zoneX forms inzone traffic
 		simResult.InZoneTraffic += zoneTrafficToZone[zoneName][zoneName]
 		zoneMaxDeviation := 0.0
 		zoneDeviation := 0.0
 		var maxLabel string
 		for label, deviation := range zd[zoneName].endpointsTrafficLoadDeviation {
-			zoneDeviation += math.Abs(deviation) * float64(endpointSlices[label].Composition[zoneName].number)
+			zoneDeviation += math.Abs(deviation) * float64(endpointSlices[label].Composition[zoneName].Number)
 			if math.Abs(deviation) > zoneMaxDeviation {
 				zoneMaxDeviation = math.Abs(deviation)
 				maxLabel = label
@@ -168,33 +170,33 @@ func getSimulationResult(zd zoneSGDetails, region regionInfo, endpointSlices map
 		totalDeviation += zoneDeviation
 		maxDeviation = math.Max(zoneMaxDeviation, maxDeviation)
 
-		var traffic zoneTraffic
-		traffic.zoneName = zoneName
+		var traffic types.ZoneTraffic
+		traffic.ZoneName = zoneName
 		// Outgoing traffic distribution
-		traffic.outgoing = zoneTrafficToZone[zoneName]
-		for originZoneName, originZone := range region.zoneDetails {
+		traffic.Outgoing = zoneTrafficToZone[zoneName]
+		for originZoneName, originZone := range region.ZoneDetails {
 			// Accumulate total incoming traffic to zoneName
-			traffic.incoming += originZone.nodesRatio * zoneTrafficToZone[originZoneName][zoneName]
+			traffic.Incoming += originZone.NodesRatio * zoneTrafficToZone[originZoneName][zoneName]
 		}
-		traffic.trafficLoad = traffic.incoming / zoneInfo.endpointsRatio
-		traffic.zoneTrafficDetail.maxDeviationSG = maxLabel
-		traffic.zoneTrafficDetail.meanDeviation = zoneDeviation / float64(zoneInfo.Endpoints)
-		traffic.zoneTrafficDetail.endpointsTrafficLoad = zd[zoneName].endpointsTrafficLoad
-		traffic.zoneTrafficDetail.endpointsTrafficLoadDeviation = zd[zoneName].endpointsTrafficLoadDeviation
+		traffic.TrafficLoad = traffic.Incoming / zoneInfo.EndpointsRatio
+		traffic.ZoneTrafficDetail.MaxDeviationSG = maxLabel
+		traffic.ZoneTrafficDetail.MeanDeviation = zoneDeviation / float64(zoneInfo.Endpoints)
+		traffic.ZoneTrafficDetail.EndpointsTrafficLoad = zd[zoneName].endpointsTrafficLoad
+		traffic.ZoneTrafficDetail.EndpointsTrafficLoadDeviation = zd[zoneName].endpointsTrafficLoadDeviation
 
 		simResult.TrafficDistribution[zoneName] = traffic
 	}
 
-	meanDeviation := totalDeviation / float64(region.totalEndpoints)
+	meanDeviation := totalDeviation / float64(region.TotalEndpoints)
 	var squareSum float64
 	var deviationSD float64
 	// calculate standard deviation of traffic load deviation
 	for zone := range zd {
 		for label, deviation := range zd[zone].endpointsTrafficLoadDeviation {
-			squareSum += math.Pow(deviation-meanDeviation, 2) * float64(endpointSlices[label].Composition[zone].number)
+			squareSum += math.Pow(deviation-meanDeviation, 2) * float64(endpointSlices[label].Composition[zone].Number)
 		}
 	}
-	deviationSD = math.Sqrt(squareSum / float64(region.totalEndpoints))
+	deviationSD = math.Sqrt(squareSum / float64(region.TotalEndpoints))
 
 	simResult.MaxDeviation = maxDeviation
 	simResult.MeanDeviation = meanDeviation
