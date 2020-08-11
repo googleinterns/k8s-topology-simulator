@@ -76,6 +76,43 @@ func (alg BackPropagationAlgorithm) CreateSliceGroups(region regionInfo) (ret ma
 				a[i][j] += beta * d[i][j]
 				a[i][arg.n-1] -= a[i][j]
 			}
+
+			// If some value <0, take the projection
+			for j := 0; j < arg.n-1; j++ {
+				if a[i][j] < 0 {
+					a[i][arg.n-1] += a[i][j]
+					a[i][j] = 0
+				}
+			}
+			if a[i][arg.n-1] < 0 {
+				for {
+					nonZero := 0
+					min := math.MaxFloat64
+					for j := 0; j < arg.n-1; j++ {
+						if a[i][j] > eps {
+							min = math.Min(a[i][j], min)
+							nonZero ++
+						}
+					}
+					val := - a[i][arg.n-1] / float64(nonZero)
+					flag := false
+					if min >= val {
+						flag = true
+					} else {
+						val = min
+					}
+					for j := 0; j < arg.n-1; j++ {
+						if a[i][j] > eps {
+							a[i][j] -= val
+							a[i][arg.n-1] += val
+						}
+					}
+					if flag {
+						break
+					}
+				}
+				a[i][arg.n-1] = 0
+			}
 		}
 		score := alg.calcScore(arg, a)
 		if score > bestScore {
@@ -185,9 +222,9 @@ func (alg BackPropagationAlgorithm) calcDerivation(arg bpArgs, a [][]float64) (d
 			if alg.useL2Norm {
 				d[i][j] = - 2 * alg.devCoeff * c * (c * a[i][j] - 1)
 			} else {
-				if c*a[i][j] > 1.0 {
+				if c*(a[i][j]+eps) > 1.0 + eps {
 					d[i][j] = - alg.devCoeff * c
-				} else {
+				} else if c*(a[i][j]+eps) < 1.0 - eps {
 					d[i][j] = alg.devCoeff * c
 				}
 			}
@@ -201,11 +238,11 @@ func (alg BackPropagationAlgorithm) calcDerivation(arg bpArgs, a [][]float64) (d
 					d[i][k] += 2 * alg.devCoeff * c * (c * a[i][j] - 1)
 				}
 			}else{
-				if c*a[i][j] > 1.0 {
+				if c*(a[i][j]+eps) > 1.0 + eps {
 					for k := 0; k < j; k++ {
 						d[i][k] += alg.devCoeff * c
 					}
-				} else {
+				} else if c*(a[i][j]+eps) < 1.0 - eps {
 					for k := 0; k < j; k++ {
 						d[i][k] -= alg.devCoeff * c
 					}
