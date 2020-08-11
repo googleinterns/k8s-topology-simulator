@@ -18,21 +18,25 @@ package modeling
 
 import (
 	"errors"
+
+	"github.com/googleinterns/k8s-topology-simulator/modeling/algorithm"
+	"github.com/googleinterns/k8s-topology-simulator/modeling/simulator"
+	"github.com/googleinterns/k8s-topology-simulator/modeling/types"
 )
 
 // Model wrapper class for the simulation components
 type Model struct {
-	slices    map[string]EndpointSliceGroup
-	alg       RoutingAlgorithm
-	simulator TrafficSimulator
-	region    regionInfo
+	slices    map[string]types.EndpointSliceGroup
+	alg       algorithm.RoutingAlgorithm
+	simulator simulator.TrafficSimulator
+	region    types.RegionInfo
 
 	// SliceCapacity is the number of max endpoints per slice
 	SliceCapacity int
 }
 
 // NewModel creates a model with routing algorithm and traffic simulator
-func NewModel(alg RoutingAlgorithm, sim TrafficSimulator) (*Model, error) {
+func NewModel(alg algorithm.RoutingAlgorithm, sim simulator.TrafficSimulator) (*Model, error) {
 	if alg == nil || sim == nil {
 		return nil, errors.New("can't create model with nil algorithm or simulator")
 	}
@@ -46,8 +50,8 @@ func NewModel(alg RoutingAlgorithm, sim TrafficSimulator) (*Model, error) {
 
 // UpdateRegion updates the region of the model, this is used to run the
 // algorithm on different zone inputs
-func (m *Model) UpdateRegion(zones []Zone) error {
-	region, err := createRegionInfo(zones)
+func (m *Model) UpdateRegion(zones []types.Zone) error {
+	region, err := types.CreateRegionInfo(zones)
 	if err != nil {
 		return err
 	}
@@ -61,7 +65,7 @@ func (m *Model) UpdateRegion(zones []Zone) error {
 }
 
 // StartSimulation based on the zones(Region) and EndpointSliceGroups
-func (m *Model) StartSimulation() (SimulationResult, error) {
+func (m *Model) StartSimulation() (types.SimulationResult, error) {
 	return m.simulator.Simulate(m.region, m.slices)
 }
 
@@ -69,7 +73,7 @@ func (m *Model) StartSimulation() (SimulationResult, error) {
 func (m *Model) GetNumberOfEndpointSlices() int {
 	totalSlices := 0
 	for _, slice := range m.slices {
-		endpoints := slice.numberOfEndpoints()
+		endpoints := slice.NumberOfEndpoints()
 		totalSlices += endpoints / m.SliceCapacity
 		if endpoints%m.SliceCapacity != 0 {
 			totalSlices++
@@ -80,5 +84,5 @@ func (m *Model) GetNumberOfEndpointSlices() int {
 
 // GetNumberOfEndpoints returns the number of total endpoints
 func (m *Model) GetNumberOfEndpoints() int {
-	return m.region.totalEndpoints
+	return m.region.TotalEndpoints
 }

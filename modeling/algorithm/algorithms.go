@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package modeling
+package algorithm
 
 import "k8s.io/klog/v2"
 
@@ -27,6 +27,9 @@ func NewAlgorithm(name string) RoutingAlgorithm {
 	case "Local", "LocalAlgorithm", "LocalSliceAlgorithm":
 		klog.Info("LocalSliceAlgorithm created")
 		return LocalSliceAlgorithm{}
+	case "Original", "OriginalAlgorithm":
+		klog.Info("OriginalAlgorithm created")
+		return OriginalAlgorithm{}
 	}
 	klog.Warningf("[WARNINIG] unknown algorithm %v, return LocalSliceAlgorithm as default\n", name)
 	return LocalSliceAlgorithm{}
