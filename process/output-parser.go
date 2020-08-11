@@ -60,13 +60,17 @@ func parseResult(file string, outputArray []outputData) (err error) {
 		totalScore := inZoneTrafficScoreWeight*inZoneTrafficScore + deviationScoreWeight*deviationScore + sliceScoreWeight*sliceScore
 
 		data := []string{rowData.name}
-		data = append(data, strconv.FormatFloat(totalScore, 'f', 4, 64))
-		data = append(data, strconv.FormatFloat(inZoneTrafficScore, 'f', 4, 64))
-		data = append(data, strconv.FormatFloat(deviationScore, 'f', 4, 64))
-		data = append(data, strconv.FormatFloat(sliceScore, 'f', 4, 64))
-		data = append(data, strconv.FormatFloat(rowData.result.MaxDeviation*100, 'f', 4, 64)+"%")
-		data = append(data, strconv.FormatFloat(rowData.result.MeanDeviation*100, 'f', 4, 64)+"%")
-		data = append(data, strconv.FormatFloat(rowData.result.DeviationSD, 'f', 4, 64))
+		if rowData.result.Invalid {
+			data = append(data, []string{"invalid", "invalid", "invalid", "invalid", "invalid", "invalid", "invalid"}...)
+		} else {
+			data = append(data, strconv.FormatFloat(totalScore, 'f', 4, 64))
+			data = append(data, strconv.FormatFloat(inZoneTrafficScore, 'f', 4, 64))
+			data = append(data, strconv.FormatFloat(deviationScore, 'f', 4, 64))
+			data = append(data, strconv.FormatFloat(sliceScore, 'f', 4, 64))
+			data = append(data, strconv.FormatFloat(rowData.result.MaxDeviation*100, 'f', 4, 64)+"%")
+			data = append(data, strconv.FormatFloat(rowData.result.MeanDeviation*100, 'f', 4, 64)+"%")
+			data = append(data, strconv.FormatFloat(rowData.result.DeviationSD, 'f', 4, 64))
+		}
 
 		err = writer.Write(data)
 		if err != nil {

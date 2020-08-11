@@ -21,6 +21,7 @@ import (
 	"math"
 
 	"github.com/googleinterns/k8s-topology-simulator/modeling/types"
+	"k8s.io/klog/v2"
 )
 
 // TheoreticalSimulator calculates the theoretical probability of the traffic
@@ -146,6 +147,20 @@ func (zd zoneSGDetails) getZoneToZoneTraffic(region types.RegionInfo, endpointSl
 
 // calculate simulation result based on probabilities
 func getSimulationResult(zd zoneSGDetails, region types.RegionInfo, endpointSlices map[string]types.EndpointSliceGroup, zoneTrafficToZone map[string]map[string]float64) types.SimulationResult {
+	// check unexpected behaviors
+	for zone := range region.ZoneDetails {
+		zoneSGDetail := zd[zone]
+		if zoneSGDetail.zoneReachableEndpointsAll <= 0 {
+			klog.Warningf("zone %s has overall %v endpoints to reach", zone, zoneSGDetail.zoneReachableEndpointsAll)
+			return types.SimulationResult{Invalid: true}
+		}
+		for label := range endpointSlices {
+			if zoneSGDetail.zoneReachableEndpoints[label] < 0 {
+				klog.Warningf("zone %s has %v endpoints to reach in EPS %s", zone, zoneSGDetail.zoneReachableEndpoints[label], label)
+				return types.SimulationResult{Invalid: true}
+			}
+		}
+	}
 
 	// calculate result of one simulation
 	var simResult types.SimulationResult
