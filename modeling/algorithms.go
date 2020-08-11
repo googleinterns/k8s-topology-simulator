@@ -27,6 +27,9 @@ func NewAlgorithm(name string) RoutingAlgorithm {
 	case "Local", "LocalAlgorithm", "LocalSliceAlgorithm":
 		klog.Info("LocalSliceAlgorithm created")
 		return LocalSliceAlgorithm{}
+	case "BP":
+		klog.Info("BackPropagationAlgorithm created")
+		return BackPropagationAlgorithm{inZoneCoeff: 0.5, devCoeff: 0.3, maxRound: 100, useL2Norm: false}
 	}
 	klog.Warningf("[WARNINIG] unknown algorithm %v, return LocalSliceAlgorithm as default\n", name)
 	return LocalSliceAlgorithm{}
