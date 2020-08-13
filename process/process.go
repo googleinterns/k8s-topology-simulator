@@ -26,7 +26,7 @@ import (
 )
 
 const endpointsPerSlice = 100
-const inZoneTrafficScoreWeight, deviationScoreWeight, sliceScoreWeight = 0.5, 0.3, 0.2
+const inZoneTrafficScoreWeight, deviationScoreWeight, sliceScoreWeight = 0.4, 0.4, 0.2
 
 // StartProcessing starts parsing input file, running simulation and
 // generating output file

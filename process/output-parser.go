@@ -52,7 +52,9 @@ func parseResult(file string, outputArray []outputData) (err error) {
 		// use in zone traffic percentage to be in zone traffic score
 		inZoneTrafficScore := rowData.result.InZoneTraffic * 100
 		// use mean deviation to calcualte deviation score
-		deviationScore := 100.0 - rowData.result.MeanDeviation*100
+		deviationMaxScore := 100.0 - rowData.result.MaxDeviation*100
+		deviationMeanScore := 100.0 - rowData.result.MeanDeviation*100
+		deviationScore := 0.5*deviationMaxScore + 0.5*deviationMeanScore
 		// use number of EndpointSlices deviation to calculate sliceScore
 		numberOfOriginalSlices := math.Ceil(float64(rowData.endpoints) / endpointsPerSlice)
 		sliceScore := (numberOfOriginalSlices / float64(rowData.endpointSlices)) * 100
