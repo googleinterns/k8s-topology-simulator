@@ -20,14 +20,15 @@ import (
 	"github.com/googleinterns/k8s-topology-simulator/modeling/types"
 )
 
-// SharedGlobalAlgorithm works on SharedGlobalAlgorithmCore with consuming the
-// global EndpointSliceGroup.
-type SharedGlobalAlgorithm struct {
+// SharedGlobalAlgorithmExclude works on SharedGlobalAlgorithmCore without
+// consuming the global EndpointSliceGroup if a zone has contributed endpoints
+// to it.
+type SharedGlobalAlgorithmExclude struct {
 	sharedCoreAlgorithm SharedGlobalAlgorithmCore
 }
 
 // CreateSliceGroups takes a region of zones as input and output
 // EndpointSliceGroups
-func (alg SharedGlobalAlgorithm) CreateSliceGroups(region types.RegionInfo) (map[string]types.EndpointSliceGroup, error) {
-	return alg.sharedCoreAlgorithm.CreateSliceGroups(region, false)
+func (alg SharedGlobalAlgorithmExclude) CreateSliceGroups(region types.RegionInfo) (map[string]types.EndpointSliceGroup, error) {
+	return alg.sharedCoreAlgorithm.CreateSliceGroups(region, true)
 }
