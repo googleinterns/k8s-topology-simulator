@@ -27,6 +27,15 @@ func NewAlgorithm(name string) RoutingAlgorithm {
 	case "Local", "LocalAlgorithm", "LocalSliceAlgorithm":
 		klog.Info("LocalSliceAlgorithm created")
 		return LocalSliceAlgorithm{}
+	case "LocalWeighted":
+		klog.Info("LocalWeightedSliceAlgorithm created")
+		return LocalWeightedSliceAlgorithm{}
+	case "LocalOpt", "LocalAlgorithmOpt", "LocalSliceAlgorithmOpt":
+		klog.Info("LocalSliceAlgorithmOpt created")
+		return LocalSliceAlgorithmOpt{}
+	case "LocalShared":
+		klog.Info("LocalSharedSliceAlgorithm created")
+		return LocalSharedSliceAlgorithm{}
 	case "Original", "OriginalAlgorithm":
 		klog.Info("OriginalAlgorithm created")
 		return OriginalAlgorithm{}

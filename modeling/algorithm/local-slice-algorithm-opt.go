@@ -18,25 +18,21 @@ package algorithm
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/googleinterns/k8s-topology-simulator/modeling/types"
 )
 
-// LocalSliceAlgorithm 'borrows' and 'rents' endpoints from other zones to make
-// the local EndpointSlice balanced with the incoming traffic (number of nodes
-// distribution):
-// 1. The proportion of incoming traffic for a zone is calculated based on the
-// proportion of nodes or cores in the zone.
-// 2. This is compared with the proportion of endpoints in the zone to calculate
-// the deviation from the expected number of endpoints in a perfectly balanced
-// system.
-// 3. EndpointSlices in zones with less endpoints than expected will receive
-// endpoints from zones that have more endpoints than expected.
-type LocalSliceAlgorithm struct{}
+// LocalSliceAlgorithmOpt is a variation of LocalSliceAlgorithm which 'borrows'
+// and 'rents' endpoints from other zones to make the local EndpointSlice
+// balanced with the incoming traffic (number of nodes distribution). This
+// variation distributes extra endpoints available after local-slice
+// distribution to a global SG with a lower weight that every zone can reach.
+type LocalSliceAlgorithmOpt struct{}
 
 // CreateSliceGroups creates sliceGroups with 'one local EndpointSliceGroup per
 // zone' policy
-func (alg LocalSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) (map[string]types.EndpointSliceGroup, error) {
+func (alg LocalSliceAlgorithmOpt) CreateSliceGroups(region types.RegionInfo) (map[string]types.EndpointSliceGroup, error) {
 	if region.ZoneDetails == nil {
 		return nil, fmt.Errorf("zoneDetail should not be nil")
 	}
@@ -58,23 +54,25 @@ func (alg LocalSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) (map[s
 
 		// calculate expected number of endpoints based on the proportion of
 		// nodes in this zone
-		expectedEndpoints := int(zone.NodesRatio * float64(region.TotalEndpoints))
+		expectedEndpoints := zone.NodesRatio * float64(region.TotalEndpoints)
 		// deviation: a negative value means need more endpoints from other
 		// sliceGroups, a positive value means need give out endpoints to other
 		// sliceGroups
-		deviation := zone.Endpoints - expectedEndpoints
+		deviation := float64(zone.Endpoints) - expectedEndpoints
 		if deviation > 0 {
-			endpointsAvailable.push(endpointDeviation{name: zoneName, deviation: deviation})
+			endpointsAvailable.push(endpointDeviation{name: zoneName, deviation: int(math.Ceil(deviation))})
 			localGroup.Composition[zoneName] = types.WeightedEndpoints{Number: int(expectedEndpoints), Weight: 1}
+		} else if deviation < 0 {
+			endpointsNeeded.push(endpointDeviation{name: zoneName, deviation: int(-deviation)})
+			localGroup.Composition[zoneName] = types.WeightedEndpoints{Number: int(zone.Endpoints), Weight: 1}
 		} else {
-			endpointsNeeded.push(endpointDeviation{name: zoneName, deviation: -deviation})
 			localGroup.Composition[zoneName] = types.WeightedEndpoints{Number: int(zone.Endpoints), Weight: 1}
 		}
 
 		sliceGroups[zoneName] = localGroup
 	}
 
-	err := alg.balanceSliceGroups(&endpointsAvailable, &endpointsNeeded, sliceGroups)
+	err := alg.balanceSliceGroups(region, &endpointsAvailable, &endpointsNeeded, sliceGroups)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +81,7 @@ func (alg LocalSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) (map[s
 
 // balanceSliceGroups distributes endpoints from zones with extra endpoints to
 // EndpointSliceGroups for zones with insufficient endpoints.
-func (alg LocalSliceAlgorithm) balanceSliceGroups(endpointsAvailable *endpointsList, endpointsNeeded *endpointsList, sliceGroups map[string]types.EndpointSliceGroup) error {
+func (alg LocalSliceAlgorithmOpt) balanceSliceGroups(region types.RegionInfo, endpointsAvailable *endpointsList, endpointsNeeded *endpointsList, sliceGroups map[string]types.EndpointSliceGroup) error {
 	for _, receiveZone := range endpointsNeeded.byZone {
 		// the available list is empty while there are still endpoints in
 		// need. This can happen when the approximation on deviation
@@ -91,6 +89,7 @@ func (alg LocalSliceAlgorithm) balanceSliceGroups(endpointsAvailable *endpointsL
 		// available and endpoints in need (in need > available)
 		if len(endpointsAvailable.byZone) == 0 {
 			// in this case, we do nothing, ignore the extra endpoints needed.
+			// return errors.New("unexpected endpoints in need")
 			return nil
 		}
 		for index := 0; index < len(endpointsAvailable.byZone); {
@@ -118,16 +117,20 @@ func (alg LocalSliceAlgorithm) balanceSliceGroups(endpointsAvailable *endpointsL
 	// the sum of approximated available endpoints > sum of approximated
 	// endpoints in need
 	if len(endpointsAvailable.byZone) != 0 {
-		// in this case, we assign those extra endpoints to its local
+		// in this case, we assign those extra endpoints to a global
 		// endpointSliceGroups
+		globalSG := types.EndpointSliceGroup{Label: "global",
+			Composition:        map[string]types.WeightedEndpoints{},
+			ZoneTrafficWeights: map[string]float64{},
+		}
+		for zone := range region.ZoneDetails {
+			globalSG.ZoneTrafficWeights[zone] = 1 / float64(len(region.ZoneDetails))
+		}
 		for _, extraEndpoints := range endpointsAvailable.byZone {
-			originalEndpoints := sliceGroups[extraEndpoints.name].Composition[extraEndpoints.name]
-			sliceGroups[extraEndpoints.name].Composition[extraEndpoints.name] = types.WeightedEndpoints{
-				Number: originalEndpoints.Number + extraEndpoints.deviation,
-				Weight: originalEndpoints.Weight,
-			}
+			globalSG.Composition[extraEndpoints.name] = types.WeightedEndpoints{Number: extraEndpoints.deviation, Weight: 1.0}
 			endpointsAvailable.pop()
 		}
+		sliceGroups["global"] = globalSG
 	}
 	return nil
 }
