@@ -112,7 +112,7 @@ func (alg LocalSharedSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) 
 	succ, err := alg.balanceSliceGroups(&endpointsNeeded, &endpointsNeededUrgent, sliceGroups, &availablePool, &receiverPool)
 	if !succ {
 		klog.Infoln("fail to do local algorithm, switch to shared global algorithm")
-		sharedAlg := SharedGlobalAlgorithm{globalWeight: 1, globalThreshold: 100}
+		sharedAlg := SharedGlobalAlgorithm{SharedGlobalAlgorithmCore{globalWeight: 1, globalThreshold: 100}}
 		return sharedAlg.CreateSliceGroups(region)
 	}
 	if err != nil {

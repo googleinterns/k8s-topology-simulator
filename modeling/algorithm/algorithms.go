@@ -23,7 +23,10 @@ func NewAlgorithm(name string) RoutingAlgorithm {
 	switch name {
 	case "SharedGlobal", "SharedGlobalAlgorithm":
 		klog.Info("SharedGlobalAlgorithm created")
-		return SharedGlobalAlgorithm{globalWeight: 0.4, globalThreshold: 100}
+		return SharedGlobalAlgorithm{sharedCoreAlgorithm: SharedGlobalAlgorithmCore{globalWeight: 0.4, globalThreshold: 100}}
+	case "SharedGlobalExclude", "SharedGlobalAlgorithmExclude":
+		klog.Info("SharedGlobalAlgorithmExclude created")
+		return SharedGlobalAlgorithmExclude{sharedCoreAlgorithm: SharedGlobalAlgorithmCore{globalWeight: 1, globalThreshold: 100}}
 	case "Local", "LocalAlgorithm", "LocalSliceAlgorithm":
 		klog.Info("LocalSliceAlgorithm created")
 		return LocalSliceAlgorithm{}
