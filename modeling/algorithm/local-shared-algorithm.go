@@ -64,7 +64,10 @@ func (alg LocalSharedSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) 
 		Region:          region,
 		ReceiveEndpoint: true,
 	}
-	for zoneName, zone := range region.ZoneDetails {
+	// traverse the map by name order
+	zoneNames := sortZoneByNames(region.ZoneDetails)
+	for _, zoneName := range zoneNames {
+		zone := region.ZoneDetails[zoneName]
 		var localGroup types.EndpointSliceGroup
 		localGroup.Label = zoneName
 		// this local sliceGroup should only receive traffic from current zone,

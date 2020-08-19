@@ -16,7 +16,11 @@ limitations under the License.
 
 package algorithm
 
-import "github.com/googleinterns/k8s-topology-simulator/modeling/types"
+import (
+	"sort"
+
+	"github.com/googleinterns/k8s-topology-simulator/modeling/types"
+)
 
 // endpointDeviation stores the deviation between expected number of endpoints
 // and actual number of endpoints of a zone
@@ -115,4 +119,15 @@ func (pq *ZonePriorityQueue) Push(x interface{}) {
 // Swap swaps zone names at index i and j
 func (pq *ZonePriorityQueue) Swap(i, j int) {
 	pq.ZoneNames[i], pq.ZoneNames[j] = pq.ZoneNames[j], pq.ZoneNames[i]
+}
+
+// sortZoneByNames sorts the map by keys and returns an array of the sorted
+// zoneNames. It helps traverse the map with a deterministic order
+func sortZoneByNames(zones map[string]types.Zone) []string {
+	var names []string
+	for name := range zones {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
