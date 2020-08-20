@@ -24,19 +24,19 @@ func NewAlgorithm(name string) RoutingAlgorithm {
 	case "SharedGlobal", "SharedGlobalAlgorithm":
 		klog.Info("SharedGlobalAlgorithm created")
 		return SharedGlobalAlgorithm{sharedCoreAlgorithm: SharedGlobalAlgorithmCore{globalWeight: 0.4, globalThreshold: 100}}
-	case "SharedGlobalExclude", "SharedGlobalAlgorithmExclude":
-		klog.Info("SharedGlobalAlgorithmExclude created")
-		return SharedGlobalAlgorithmExclude{sharedCoreAlgorithm: SharedGlobalAlgorithmCore{globalWeight: 1, globalThreshold: 100}}
-	case "Local", "LocalAlgorithm", "LocalSliceAlgorithm":
+	case "SharedMultiZone", "SharedMultiZoneAlgorithm":
+		klog.Info("SharedMultiZoneAlgorithm created")
+		return SharedMultiZoneAlgorithm{sharedCoreAlgorithm: SharedGlobalAlgorithmCore{globalWeight: 1, globalThreshold: 100}}
+	case "LocalAlgorithm", "LocalSliceAlgorithm":
 		klog.Info("LocalSliceAlgorithm created")
 		return LocalSliceAlgorithm{}
-	case "LocalWeighted":
+	case "LocalWeighted", "LocalWeightedAlgorithm":
 		klog.Info("LocalWeightedSliceAlgorithm created")
 		return LocalWeightedSliceAlgorithm{}
-	case "LocalOpt", "LocalAlgorithmOpt", "LocalSliceAlgorithmOpt":
+	case "LocalOpt", "LocalOptAlgorithm":
 		klog.Info("LocalSliceAlgorithmOpt created")
 		return LocalSliceAlgorithmOpt{}
-	case "LocalShared":
+	case "LocalShared", "LocalSharedAlgorithm":
 		klog.Info("LocalSharedSliceAlgorithm created")
 		return LocalSharedSliceAlgorithm{}
 	case "Original", "OriginalAlgorithm":

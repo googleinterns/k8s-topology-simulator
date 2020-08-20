@@ -27,9 +27,9 @@ import (
 
 // LocalSharedSliceAlgorithm is one variation of LocalSliceAlgorithm which
 // 'borrows' and 'rents' endpoints from other zones to make the local
-// EndpointSlice balanced with the incoming traffic (number of nodes
+// EndpointSliceGroup balanced with the incoming traffic (number of nodes
 // distribution). This variation deals with failed corner cases by sharing
-// endpoints to zones has no endpoints.
+// endpoints to zones that have no endpoints.
 type LocalSharedSliceAlgorithm struct{}
 
 // CreateSliceGroups creates sliceGroups with 'one local EndpointSliceGroup per
@@ -51,7 +51,7 @@ func (alg LocalSharedSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) 
 	// endpointsNeeded stores zones with number of endpoints needed
 	endpointsNeeded := endpointsList{}
 	// endpointsNeededUrgent stores high priority zones with number of endpoints
-	// needed
+	// needed. high priority zones: zones have no endpoints
 	endpointsNeededUrgent := endpointsList{}
 	// availablePool is used to contribute endpoints shared with zones when there
 	// are not enough endpoints in the available list.
@@ -84,15 +84,17 @@ func (alg LocalSharedSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) 
 		deviation := float64(zone.Endpoints) - expectedEndpoints
 		// if deviation > 0, this zone is a qualified candidate for
 		// availablePool that contributes endpoints to other zones
-		validCandidate := !math.Signbit(deviation)
-		if validCandidate {
+		if deviation > 0 {
 			availablePool.ZoneNames = append(availablePool.ZoneNames, zoneName)
 		}
 		receiverPool.ZoneNames = append(receiverPool.ZoneNames, zoneName)
-		// merge all the zones have no endpoints into a whole
+		// merge all the zones with no endpoints into a shared slice group
 		if zone.Endpoints == 0 {
-			// this is a form used to accuratly represent the deviation in
-			// float, floatDeviation = 1 * -deviation
+			// this is a form used to accurately represent the deviation in
+			// float, floatDeviation = 1 * abs(deviation). If we do the
+			// approximate here, it could lead to a large accuracy lose with
+			// the accumulated approximated value. We keep the accurate value
+			// for these zones and convert to integer after merge.
 			endpointsNeededUrgent.push(endpointDeviation{name: zoneName, deviation: 1, weight: -deviation})
 			continue
 		}
@@ -106,12 +108,10 @@ func (alg LocalSharedSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) 
 	}
 	availablePool.SliceGroups = sliceGroups
 	receiverPool.SliceGroups = sliceGroups
-	heap.Init(&availablePool)
-	heap.Init(&receiverPool)
 
 	succ, err := alg.balanceSliceGroups(&endpointsNeeded, &endpointsNeededUrgent, sliceGroups, &availablePool, &receiverPool)
 	if !succ {
-		klog.Infoln("fail to do local algorithm, switch to shared global algorithm")
+		klog.Infoln("failed to use local algorithm, switching to shared global algorithm")
 		sharedAlg := SharedGlobalAlgorithm{SharedGlobalAlgorithmCore{globalWeight: 1, globalThreshold: 100}}
 		return sharedAlg.CreateSliceGroups(region)
 	}
@@ -124,9 +124,15 @@ func (alg LocalSharedSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) 
 // balanceSliceGroups distributes endpoints from zones with extra endpoints to
 // EndpointSliceGroups for zones with insufficient endpoints.
 func (alg LocalSharedSliceAlgorithm) balanceSliceGroups(endpointsNeeded *endpointsList, endpointsNeededUrgent *endpointsList, sliceGroups map[string]types.EndpointSliceGroup, availablePool *ZonePriorityQueue, receiverPool *ZonePriorityQueue) (bool, error) {
+	heap.Init(availablePool)
+	heap.Init(receiverPool)
 	// merge one sharedSG that zones in the urgent list will consume
 	mergedSG := types.EndpointSliceGroup{Composition: map[string]types.WeightedEndpoints{}, ZoneTrafficWeights: map[string]float64{}}
+	// merged deviation for urgent zones, this stores the deviation value after
+	// approximation from float to int
 	mergedED := endpointDeviation{name: "merged"}
+	// accumulate the float deviation of every urgent zone, this is an actual
+	// value of sum(deviation)
 	mergedDeviation := 0.0
 	for _, urgentZone := range endpointsNeededUrgent.byZone {
 		mergedED.name += "-" + urgentZone.name
@@ -134,8 +140,8 @@ func (alg LocalSharedSliceAlgorithm) balanceSliceGroups(endpointsNeeded *endpoin
 		mergedSG.ZoneTrafficWeights[urgentZone.name] = 1
 		endpointsNeededUrgent.pop()
 	}
-	// take the ceil, in case the deviation = 0.xx, we have to make sure there
-	// is at least one endpoint in this shared SG.
+	// take the ceil, if the deviation > 0, we have to make sure there is at
+	// least one endpoint in this shared SG (avoid 0.x ending up with 0)
 	mergedED.deviation = int(math.Ceil(mergedDeviation))
 	mergedSG.Label = mergedED.name
 	if mergedDeviation != 0 {
@@ -158,9 +164,10 @@ func (alg LocalSharedSliceAlgorithm) balanceSliceGroups(endpointsNeeded *endpoin
 		updateSGComposition(sliceGroups[receiveZone.name], candidate, 1, 1)
 
 		// remain a potential provider as long as it has more endpoints than
-		// expected
-		expectedEndpoints := float64(availablePool.Region.TotalEndpoints) * availablePool.Region.ZoneDetails[candidate].NodesRatio
-		if float64(sliceGroups[candidate].Composition[candidate].Number) > expectedEndpoints {
+		// expected. candidate is guaranteed to have a local owned SG, omit the
+		// second returned value
+		deviation, _ := getEndpointsDeviation(availablePool.Region, availablePool.SliceGroups, candidate)
+		if deviation > 0 {
 			heap.Push(availablePool, candidate)
 		}
 
@@ -176,24 +183,36 @@ func (alg LocalSharedSliceAlgorithm) balanceSliceGroups(endpointsNeeded *endpoin
 	// the second and third zone will not require endpoints based on floor
 	// approximation (2.8 -> 2). But the 1st zone has too many endpoints, it
 	// should give one out.
-	for {
-		if availablePool.Len() == 0 {
+	for availablePool.Len() > 0 {
+		candidate := heap.Pop(availablePool).(string)
+		// candidate is guaranteed to have a local owned SG, omit the second
+		// returned value
+		deviation, _ := getEndpointsDeviation(availablePool.Region, availablePool.SliceGroups, candidate)
+		if deviation < 1 {
 			break
 		}
-		candidate := heap.Pop(availablePool).(string)
-		expectedEndpoints := float64(availablePool.Region.TotalEndpoints) * availablePool.Region.ZoneDetails[candidate].NodesRatio
-		if float64(sliceGroups[candidate].Composition[candidate].Number)-expectedEndpoints >= 1 {
-			receiveZone := heap.Pop(receiverPool).(string)
-			updateSGComposition(sliceGroups[receiveZone], candidate, 1, 1)
-			heap.Push(receiverPool, receiveZone)
+		// if candidate zone has at least one extra endpoints than it
+		// expects, it should give that endpoint out to a zone that needs
+		// endpoints from other zones.
+		receiveZone := heap.Pop(receiverPool).(string)
+		updateSGComposition(sliceGroups[receiveZone], candidate, 1, 1)
+		heap.Push(receiverPool, receiveZone)
 
-			updateSGComposition(sliceGroups[candidate], candidate, -1, 1)
-			heap.Push(availablePool, candidate)
-			continue
-		}
-		break
+		updateSGComposition(sliceGroups[candidate], candidate, -1, 1)
+		heap.Push(availablePool, candidate)
 	}
 	return true, nil
+}
+
+// helper function help calculate the deviation between locally owned endpoints
+// and expected endpoints.
+func getEndpointsDeviation(region types.RegionInfo, sliceGroups map[string]types.EndpointSliceGroup, zone string) (float64, bool) {
+	expectedEndpoints := float64(region.TotalEndpoints) * region.ZoneDetails[zone].NodesRatio
+	sliceGroup, ok := sliceGroups[zone]
+	if !ok {
+		return 0.0, false
+	}
+	return float64(sliceGroup.Composition[zone].Number) - expectedEndpoints, true
 }
 
 // helper function to update composition in ESG

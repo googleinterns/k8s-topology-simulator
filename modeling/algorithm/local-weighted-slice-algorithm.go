@@ -65,25 +65,28 @@ func (alg LocalWeightedSliceAlgorithm) CreateSliceGroups(region types.RegionInfo
 		// other zones, a positive value means this zone needs to give out
 		// endpoints to other zones
 		deviation := float64(zone.Endpoints) - expectedEndpoints
-		// intDeviation is dealt same way as original local-slice algorithm that
-		// directly 'borrows' or 'sends' endpoints among zones
+		// intDeviation is dealt with the same way as original local-slice
+		// algorithm that directly 'borrows' or 'sends' endpoints among zones
 		intDeviation := int(deviation)
+		weightedEndpoints := types.WeightedEndpoints{Weight: 1}
 		if intDeviation == 0 {
-			localGroup.Composition[zoneName] = types.WeightedEndpoints{Number: int(expectedEndpoints), Weight: 1}
+			weightedEndpoints.Number = int(expectedEndpoints)
 		} else if intDeviation > 0 {
 			endpointsAvailable.push(endpointDeviation{name: zoneName, deviation: intDeviation})
-			localGroup.Composition[zoneName] = types.WeightedEndpoints{Number: int(expectedEndpoints), Weight: 1}
+			weightedEndpoints.Number = int(expectedEndpoints)
 		} else {
 			endpointsNeeded.push(endpointDeviation{name: zoneName, deviation: -intDeviation})
-			localGroup.Composition[zoneName] = types.WeightedEndpoints{Number: zone.Endpoints, Weight: 1}
+			weightedEndpoints.Number = zone.Endpoints
 		}
+		localGroup.Composition[zoneName] = weightedEndpoints
 		sliceGroups[zoneName] = localGroup
 
-		// push 0.xx deviation into corresponding lists
+		// push decimal part of deviation into corresponding lists
 		// 2.3 expected endpoints, 3 ownd endpoints, 0.7 decimal deviation, 0.3
 		// endpoints and 2 endpoints needed
 		// 2.4 expected endpoints, 1 owned endpoint, -0.4 decimal deviation, 0.4
 		// endpoints and 2 endpoints needed
+		// decimal part = actual deviation - int part of deviation
 		decimalDeviation := deviation - float64(intDeviation)
 		if decimalDeviation > 0 {
 			// One endpoint from this zone will contribute 1-decimalDeviation to
@@ -91,6 +94,8 @@ func (alg LocalWeightedSliceAlgorithm) CreateSliceGroups(region types.RegionInfo
 			// will be implemented through routing weights of EndpointSliceGroup
 			weightedEndpointsAvailable.push(endpointDeviation{name: zoneName, deviation: 1, weight: 1 - decimalDeviation, consumeByLocal: true})
 		} else if decimalDeviation < 0 {
+			// as described in comments above, -decimalDeviation is the decimal
+			// part of the expected endpoints
 			weightedEndpointsNeeded.push(endpointDeviation{name: zoneName, deviation: 1, weight: -decimalDeviation})
 		}
 	}
@@ -113,31 +118,12 @@ func (alg LocalWeightedSliceAlgorithm) balanceSliceGroups(endpointsAvailable *en
 			endpointsNeeded.pop()
 			continue
 		}
-		// same logic as original local-slice algorithm
-		for index := 0; index < len(endpointsAvailable.byZone); {
-			sendZone := endpointsAvailable.byZone[index]
-			if sendZone.deviation == receiveZone.deviation {
-				sliceGroups[receiveZone.name].Composition[sendZone.name] = types.WeightedEndpoints{Number: sendZone.deviation, Weight: 1}
-				receiveZone.deviation = 0
-				endpointsAvailable.pop()
-				break
-			}
-			if sendZone.deviation > receiveZone.deviation {
-				sliceGroups[receiveZone.name].Composition[sendZone.name] = types.WeightedEndpoints{Number: receiveZone.deviation, Weight: 1}
-				endpointsAvailable.byZone[index].deviation -= receiveZone.deviation
-				receiveZone.deviation = 0
-				break
-			}
-			if sendZone.deviation < receiveZone.deviation {
-				sliceGroups[receiveZone.name].Composition[sendZone.name] = types.WeightedEndpoints{Number: sendZone.deviation, Weight: 1}
-				receiveZone.deviation -= sendZone.deviation
-				endpointsAvailable.pop()
-				continue
-			}
-		}
-		// if needed.deviation != 0 means more full endpoints needed than
-		// available, push to weighted list and deal them as partial endpoints
-		if receiveZone.deviation != 0 {
+		// same as original local algorithm assignment
+		assignEndpoints(&receiveZone, endpointsAvailable, sliceGroups)
+		// if needed.deviation > 0 means more full endpoints needed than
+		// available, push to weighted list and deal with them as partial
+		// endpoints. receiveZone.deviation should only be either 0 or > 0
+		if receiveZone.deviation > 0 {
 			receiveZone.weight = 1
 			weightedEndpointsNeeded.push(receiveZone)
 		}
@@ -160,7 +146,7 @@ func (alg LocalWeightedSliceAlgorithm) balanceSliceGroups(endpointsAvailable *en
 	// weight to zoneA
 	for _, extraEndpoints := range weightedEndpointsAvailable.byZone {
 		sharedSlice := types.EndpointSliceGroup{Label: "shared", Composition: map[string]types.WeightedEndpoints{}, ZoneTrafficWeights: map[string]float64{}}
-		// If this endpoint will be consumbed by its local zone, contribue to
+		// If this endpoint will be consumed by its local zone, contribute to
 		// the local zone first then use the remaining 'weights' to share with
 		// other zones
 		if extraEndpoints.consumeByLocal {
@@ -201,7 +187,6 @@ func (alg LocalWeightedSliceAlgorithm) balanceSliceGroups(endpointsAvailable *en
 				sharedSlice.Label += "-" + receiveZone.name
 				extraEndpoints.weight -= sharedSlice.ZoneTrafficWeights[receiveZone.name]
 				weightedEndpointsNeeded.pop()
-				continue
 			}
 		}
 		sliceGroups[sharedSlice.Label] = sharedSlice

@@ -42,11 +42,13 @@ type SharedGlobalAlgorithmCore struct {
 // EndpointSliceGroups
 func (alg SharedGlobalAlgorithmCore) CreateSliceGroups(region types.RegionInfo, excludeContributor bool) (map[string]types.EndpointSliceGroup, error) {
 	if region.ZoneDetails == nil {
-		return nil, errors.New("can't create EndpointSlices with 0 number of zone")
+		return nil, errors.New("can't create EndpointSlices without zones specified")
+	}
+	if region.TotalEndpoints <= alg.globalThreshold {
+		return OriginalAlgorithm{}.CreateSliceGroups(region)
 	}
 	// The deviation for the traffic and capacity above
 	deviation := make(map[string]float64)
-
 	for _, zone := range region.ZoneDetails {
 		// Calculate the deviation based on the capacity(endpoints) and
 		// traffic(nodes) ratio
@@ -55,30 +57,19 @@ func (alg SharedGlobalAlgorithmCore) CreateSliceGroups(region types.RegionInfo, 
 
 	// Output EndpointSlices
 	sliceGroups := make(map[string]types.EndpointSliceGroup)
-	// The global sliceGroup -- might be split into many small global slices
-	// when the number of endpoints > required number of endpoints per
-	// EndpointSlice, i.e. 100 for default. Not be able to divide the big one
-	// into smaller ones that the contributions may vary and there is no need to
-	// do so either.
+	// globalSG is shared among all the zones
 	var globalSliceGroup types.EndpointSliceGroup
 	globalSliceGroup.Label = "global"
 	globalSliceGroup.Composition = make(map[string]types.WeightedEndpoints)
 	globalSliceGroup.ZoneTrafficWeights = make(map[string]float64)
 	for name, zone := range region.ZoneDetails {
 		var globalEndpoints types.WeightedEndpoints
-		// If total pods <= threshold, all pods go to global slice
-		if region.TotalEndpoints <= alg.globalThreshold {
-			globalEndpoints.Number = zone.Endpoints
-			globalEndpoints.Weight = 1
-		} else {
-			// Otherwise calculate the global contribution of current zone based
-			// on the global weight and the deviation of this zone
-			// If deviation > 0, this zone has more endpoints compared to the
-			// ratio of nodes. It should contribute the extra endpoints to the
-			// global sliceGroup with the weight counted.
-			globalEndpoints.Number = int(math.Min(math.Max(0.0, deviation[name])/alg.globalWeight, float64(zone.Endpoints)))
-			globalEndpoints.Weight = 1
-		}
+		// calculate the global contribution of current zone based on the global
+		// weight and the deviation of this zone If deviation > 0, this zone has
+		// more endpoints compared to the ratio of nodes. It should contribute
+		// the extra endpoints to the global sliceGroup with the weight counted.
+		globalEndpoints.Number = int(math.Min(math.Max(0.0, deviation[name])/alg.globalWeight, float64(zone.Endpoints)))
+		globalEndpoints.Weight = 1
 
 		globalSliceGroup.Composition[name] = globalEndpoints
 		globalSliceGroup.ZoneTrafficWeights[name] = alg.globalWeight

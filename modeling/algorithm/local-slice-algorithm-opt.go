@@ -59,16 +59,17 @@ func (alg LocalSliceAlgorithmOpt) CreateSliceGroups(region types.RegionInfo) (ma
 		// sliceGroups, a positive value means need give out endpoints to other
 		// sliceGroups
 		deviation := float64(zone.Endpoints) - expectedEndpoints
+		weightedEndpoints := types.WeightedEndpoints{Weight: 1}
 		if deviation > 0 {
 			endpointsAvailable.push(endpointDeviation{name: zoneName, deviation: int(math.Ceil(deviation))})
-			localGroup.Composition[zoneName] = types.WeightedEndpoints{Number: int(expectedEndpoints), Weight: 1}
+			weightedEndpoints.Number = int(expectedEndpoints)
 		} else if deviation < 0 {
 			endpointsNeeded.push(endpointDeviation{name: zoneName, deviation: int(-deviation)})
-			localGroup.Composition[zoneName] = types.WeightedEndpoints{Number: int(zone.Endpoints), Weight: 1}
+			weightedEndpoints.Number = zone.Endpoints
 		} else {
-			localGroup.Composition[zoneName] = types.WeightedEndpoints{Number: int(zone.Endpoints), Weight: 1}
+			weightedEndpoints.Number = zone.Endpoints
 		}
-
+		localGroup.Composition[zoneName] = weightedEndpoints
 		sliceGroups[zoneName] = localGroup
 	}
 
@@ -92,33 +93,15 @@ func (alg LocalSliceAlgorithmOpt) balanceSliceGroups(region types.RegionInfo, en
 			// return errors.New("unexpected endpoints in need")
 			return nil
 		}
-		for index := 0; index < len(endpointsAvailable.byZone); {
-			sendZone := endpointsAvailable.byZone[index]
-			if sendZone.deviation == receiveZone.deviation {
-				sliceGroups[receiveZone.name].Composition[sendZone.name] = types.WeightedEndpoints{Number: sendZone.deviation, Weight: 1}
-				endpointsAvailable.pop()
-				break
-			}
-			if sendZone.deviation > receiveZone.deviation {
-				sliceGroups[receiveZone.name].Composition[sendZone.name] = types.WeightedEndpoints{Number: receiveZone.deviation, Weight: 1}
-				endpointsAvailable.byZone[index].deviation -= receiveZone.deviation
-				break
-			}
-			if sendZone.deviation < receiveZone.deviation {
-				sliceGroups[receiveZone.name].Composition[sendZone.name] = types.WeightedEndpoints{Number: sendZone.deviation, Weight: 1}
-				receiveZone.deviation -= sendZone.deviation
-				endpointsAvailable.pop()
-				continue
-			}
-		}
+		// same as original local algorithm assignment
+		assignEndpoints(&receiveZone, endpointsAvailable, sliceGroups)
 		endpointsNeeded.pop()
 	}
-	// all endpoints should have been distributed properly. This happens when
-	// the sum of approximated available endpoints > sum of approximated
-	// endpoints in need
+	// This happens when the sum of approximated available endpoints > sum of
+	// approximated endpoints in need
 	if len(endpointsAvailable.byZone) != 0 {
 		// in this case, we assign those extra endpoints to a global
-		// endpointSliceGroups
+		// endpointSliceGroup
 		globalSG := types.EndpointSliceGroup{Label: "global",
 			Composition:        map[string]types.WeightedEndpoints{},
 			ZoneTrafficWeights: map[string]float64{},
