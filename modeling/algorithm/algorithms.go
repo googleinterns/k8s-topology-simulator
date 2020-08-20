@@ -23,10 +23,22 @@ func NewAlgorithm(name string) RoutingAlgorithm {
 	switch name {
 	case "SharedGlobal", "SharedGlobalAlgorithm":
 		klog.Info("SharedGlobalAlgorithm created")
-		return SharedGlobalAlgorithm{globalWeight: 0.4, globalThreshold: 100}
-	case "Local", "LocalAlgorithm", "LocalSliceAlgorithm":
+		return SharedGlobalAlgorithm{sharedCoreAlgorithm: SharedGlobalAlgorithmCore{globalWeight: 0.4, globalThreshold: 100}}
+	case "SharedMultiZone", "SharedMultiZoneAlgorithm":
+		klog.Info("SharedMultiZoneAlgorithm created")
+		return SharedMultiZoneAlgorithm{sharedCoreAlgorithm: SharedGlobalAlgorithmCore{globalWeight: 1, globalThreshold: 100}}
+	case "LocalAlgorithm", "LocalSliceAlgorithm":
 		klog.Info("LocalSliceAlgorithm created")
 		return LocalSliceAlgorithm{}
+	case "LocalWeighted", "LocalWeightedAlgorithm":
+		klog.Info("LocalWeightedSliceAlgorithm created")
+		return LocalWeightedSliceAlgorithm{}
+	case "LocalOpt", "LocalOptAlgorithm":
+		klog.Info("LocalSliceAlgorithmOpt created")
+		return LocalSliceAlgorithmOpt{}
+	case "LocalShared", "LocalSharedAlgorithm":
+		klog.Info("LocalSharedSliceAlgorithm created")
+		return LocalSharedSliceAlgorithm{}
 	case "Original", "OriginalAlgorithm":
 		klog.Info("OriginalAlgorithm created")
 		return OriginalAlgorithm{}
