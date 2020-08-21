@@ -27,7 +27,7 @@ func NewAlgorithm(name string) RoutingAlgorithm {
 	case "SharedMultiZone", "SharedMultiZoneAlgorithm":
 		klog.Info("SharedMultiZoneAlgorithm created")
 		return SharedMultiZoneAlgorithm{sharedCoreAlgorithm: SharedGlobalAlgorithmCore{globalWeight: 1, globalThreshold: 100}}
-	case "LocalAlgorithm", "LocalSliceAlgorithm":
+	case "Local", "LocalAlgorithm":
 		klog.Info("LocalSliceAlgorithm created")
 		return LocalSliceAlgorithm{}
 	case "LocalWeighted", "LocalWeightedAlgorithm":
