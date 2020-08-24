@@ -85,12 +85,6 @@ func (alg LocalSharedSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) 
 		// sliceGroups, a positive value means need give out endpoints to other
 		// sliceGroups
 		deviation := float64(zone.Endpoints) - expectedEndpoints
-		// if deviation > 0, this zone is a qualified candidate for
-		// availablePool that contributes endpoints to other zones
-		if deviation > 0 {
-			availablePool.ZoneNames = append(availablePool.ZoneNames, zoneName)
-		}
-		receiverPool.ZoneNames = append(receiverPool.ZoneNames, zoneName)
 		// merge all the zones with no endpoints into a shared slice group
 		if zone.Endpoints == 0 {
 			// this is a form used to accurately represent the deviation in
@@ -104,6 +98,14 @@ func (alg LocalSharedSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) 
 		localGroup.Composition[zoneName] = types.WeightedEndpoints{Number: zone.Endpoints, Weight: 1}
 		sliceGroups[zoneName] = localGroup
 
+		// if deviation > 0 and has more than 1 endpoints in its local
+		// sliceGroup, this zone is a qualified candidate for availablePool that
+		// contributes endpoints to other zones
+		if validContributor(deviation, zoneName, localGroup) {
+			availablePool.ZoneNames = append(availablePool.ZoneNames, zoneName)
+		}
+		receiverPool.ZoneNames = append(receiverPool.ZoneNames, zoneName)
+
 		// deviation = -0.xx will end up with 0, omit those cases
 		if deviation <= -1 {
 			endpointsNeeded.push(endpointDeviation{name: zoneName, deviation: int(-deviation)})
@@ -114,7 +116,7 @@ func (alg LocalSharedSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) 
 
 	succ, err := alg.balanceSliceGroups(&endpointsNeeded, &endpointsNeededUrgent, sliceGroups, &availablePool, &receiverPool)
 	if !succ {
-		klog.Infoln("failed to use local algorithm, switching to shared global algorithm")
+		klog.Infoln("failed to use local shared algorithm, switching to shared global algorithm")
 		sharedAlg := SharedGlobalAlgorithm{SharedGlobalAlgorithmCore{globalWeight: 1, globalThreshold: 100}}
 		return sharedAlg.CreateSliceGroups(region)
 	}
@@ -167,10 +169,11 @@ func (alg LocalSharedSliceAlgorithm) balanceSliceGroups(endpointsNeeded *endpoin
 		updateSGComposition(sliceGroups[receiveZone.name], candidate, 1, 1)
 
 		// remain a potential provider as long as it has more endpoints than
-		// expected. candidate is guaranteed to have a local owned SG, omit the
-		// second returned value
+		// expected and has more than one endpoints in its local sliceGroup.
+		// candidate is guaranteed to have a local owned SG, omit the second
+		// returned value
 		deviation, _ := getEndpointsDeviation(availablePool.Region, availablePool.SliceGroups, candidate)
-		if deviation > 0 {
+		if validContributor(deviation, candidate, sliceGroups[candidate]) {
 			heap.Push(availablePool, candidate)
 		}
 
@@ -224,4 +227,13 @@ func updateSGComposition(sliceGroup types.EndpointSliceGroup, zone string, delta
 	weightedComp.Number += delta
 	weightedComp.Weight = weight
 	sliceGroup.Composition[zone] = weightedComp
+}
+
+// detect whether a zone is valid to contribute endpoints to other zones
+func validContributor(deviation float64, zoneName string, sliceGroup types.EndpointSliceGroup) bool {
+	// if the sliceGroup has no local composition, it is not a valid contributor
+	if sliceGroup.Composition == nil {
+		return false
+	}
+	return deviation > 0 && sliceGroup.Composition[zoneName].Number > 1
 }

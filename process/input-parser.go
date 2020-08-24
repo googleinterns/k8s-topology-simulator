@@ -28,13 +28,14 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// parseInput parses input csv file to instances of inputData and returns a
-// slice of them
-func parseInput(file string) ([]inputData, error) {
+// paserInput parses an input csv file to instances of inputData and puts them
+// into a queue(channel)
+func parseInput(file string) (<-chan inputData, error) {
 	inputFile, err := os.Open(filepath.Join("", filepath.Clean(file)))
 	if err != nil {
 		return nil, err
 	}
+
 	klog.Infof("Reading data from %v\n", file)
 	reader := csv.NewReader(inputFile)
 	reader.TrimLeadingSpace = true
@@ -47,21 +48,27 @@ func parseInput(file string) ([]inputData, error) {
 		name = strings.TrimSpace(name)
 		zoneNames = append(zoneNames, name)
 	}
-	var dataArray []inputData
-	for {
-		var data inputData
-		var done bool
-		data, done, err = readOneRow(zoneNames, reader)
-		if done {
-			break
+	inputQueue := make(chan inputData)
+
+	go func() {
+		defer close(inputQueue)
+		defer func() {
+			cerr := inputFile.Close()
+			if cerr != nil {
+				klog.Errorf("close input file %s with an error %v", file, cerr)
+			}
+		}()
+
+		for data, done, rerr := readOneRow(zoneNames, reader); !done; data, done, rerr = readOneRow(zoneNames, reader) {
+			if rerr != nil {
+				klog.Errorf("can't parse input data: %v, due to error: %v, skip to next row\n", data.name, err)
+				continue
+			}
+			inputQueue <- data
 		}
-		if err != nil {
-			klog.Infof("can't parse input data: %v, skip to next row\n", data.name)
-			continue
-		}
-		dataArray = append(dataArray, data)
-	}
-	return dataArray, err
+	}()
+
+	return inputQueue, err
 }
 
 // parse one row of input file to one instance of inputData

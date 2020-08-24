@@ -17,12 +17,11 @@ limitations under the License.
 package process
 
 import (
-	"fmt"
-
 	"github.com/googleinterns/k8s-topology-simulator/modeling"
 	"github.com/googleinterns/k8s-topology-simulator/modeling/algorithm"
 	"github.com/googleinterns/k8s-topology-simulator/modeling/simulator"
 	"github.com/googleinterns/k8s-topology-simulator/modeling/types"
+	"k8s.io/klog/v2"
 )
 
 const endpointsPerSlice = 100
@@ -31,18 +30,24 @@ const inZoneTrafficScoreWeight, deviationScoreWeight, sliceScoreWeight = 0.4, 0.
 // StartProcessing starts parsing input file, running simulation and
 // generating output file
 func StartProcessing(inputFile string, outputFile string, alg string) error {
-	inputArray, err := parseInput(inputFile)
+
+	// initialize a goroutine to keep reading row data from input file and
+	// putting the converted row data into a queue
+	inputQueue, err := parseInput(inputFile)
 	if err != nil {
 		return err
 	}
 
-	outputArray, err := startSimulation(alg, inputArray)
+	// initialize a goroutine to keep processing row data from inputQueue and
+	// putting the processed data into another queue
+	outputQueue, err := startSimulation(alg, inputQueue)
 	if err != nil {
 		return err
 	}
 
-	err = parseResult(outputFile, outputArray)
-	return err
+	// parse results from outputQueue and write to output file in the main
+	// thread which will end after all data has been processed
+	return parseResult(outputFile, outputQueue)
 }
 
 // every row of the input file will be parsed to one instance of inputData
@@ -66,9 +71,9 @@ type outputData struct {
 }
 
 // startSimulation processes simulation on input data, produces instances of
-// outputData structure and returns a slice of them
-func startSimulation(algName string, inputArray []inputData) ([]outputData, error) {
-	// create algrithm based on the algorithm name delivered by the flag
+// outputData structure and puts them in a queue(channel)
+func startSimulation(algName string, inputQueue <-chan inputData) (<-chan outputData, error) {
+	// create algorithm based on the algorithm name
 	alg := algorithm.NewAlgorithm(algName)
 	// create simulation model, currently do calculation based on probability
 	// rather than real simulation.
@@ -76,23 +81,39 @@ func startSimulation(algName string, inputArray []inputData) ([]outputData, erro
 	if err != nil {
 		return nil, err
 	}
-	model.SliceCapacity = endpointsPerSlice
-	var outputArray []outputData
-	for _, rowData := range inputArray {
-		err := model.UpdateRegion(rowData.zones)
-		if err != nil {
-			return outputArray, fmt.Errorf("error updating region for input : %s, %v", rowData.name, err)
-		}
-		simRes, err := model.StartSimulation()
-		if err != nil {
-			return outputArray, fmt.Errorf("error starting simulation for input : %s, %v", rowData.name, err)
-		}
-		outputArray = append(outputArray, outputData{name: rowData.name,
-			endpoints:      model.GetNumberOfEndpoints(),
-			endpointSlices: model.GetNumberOfEndpointSlices(),
-			result:         simRes,
-		})
-	}
+	outputQueue := make(chan outputData)
+	// since we only have one goroutine working on the data processing, although
+	// the model is not thread safe, for simplicity we create the model outside
+	// the goroutine but use it inside the goroutine.
+	go func() {
+		defer close(outputQueue)
 
-	return outputArray, nil
+		for rowData, more := <-inputQueue; more; rowData, more = <-inputQueue {
+			oData, rerr := runSimulation(model, rowData)
+			if rerr == nil {
+				outputQueue <- oData
+			}
+		}
+	}()
+
+	return outputQueue, err
+}
+
+// helper function helps to generate one piece of outputData from one piece of
+// inputData
+func runSimulation(model *modeling.Model, rowData inputData) (outputData, error) {
+	err := model.UpdateRegion(rowData.zones)
+	if err != nil {
+		klog.Errorf("error updating region for input : %s, %v", rowData.name, err)
+		return outputData{}, err
+	}
+	simRes, err := model.StartSimulation()
+	if err != nil {
+		klog.Errorf("error starting simulation for input : %s, %v", rowData.name, err)
+		return outputData{}, err
+	}
+	return outputData{name: rowData.name,
+		endpoints:      model.GetNumberOfEndpoints(),
+		endpointSlices: model.GetNumberOfEndpointSlices(),
+		result:         simRes}, nil
 }

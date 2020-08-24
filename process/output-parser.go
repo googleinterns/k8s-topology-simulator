@@ -27,13 +27,16 @@ import (
 
 // parseResult parses outputData to evaluation metrics and writes back to a
 // result file
-func parseResult(file string, outputArray []outputData) (err error) {
+func parseResult(file string, outputQueue <-chan outputData) (err error) {
 	outputFile, err := os.Create(file)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		cerr := outputFile.Close()
+		if cerr != nil {
+			klog.Errorf("close output file %s with an error %v", file, cerr)
+		}
 		if err == nil {
 			err = cerr
 		}
@@ -48,7 +51,7 @@ func parseResult(file string, outputArray []outputData) (err error) {
 		return err
 	}
 
-	for _, rowData := range outputArray {
+	for rowData, more := <-outputQueue; more; rowData, more = <-outputQueue {
 		// use in zone traffic percentage to be in zone traffic score
 		inZoneTrafficScore := rowData.result.InZoneTraffic * 100
 		// use mean deviation to calcualte deviation score
