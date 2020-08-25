@@ -45,7 +45,10 @@ func (alg LocalSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) (map[s
 	endpointsAvailable := endpointsList{}
 	// endpointsNeeded stores zones with number of endpoints needed
 	endpointsNeeded := endpointsList{}
-	for zoneName, zone := range region.ZoneDetails {
+	// traverse the map by name order
+	zoneNames := sortZoneByNames(region.ZoneDetails)
+	for _, zoneName := range zoneNames {
+		zone := region.ZoneDetails[zoneName]
 		var localGroup types.EndpointSliceGroup
 		localGroup.Label = zoneName
 		// this local sliceGroup should only receive traffic from current zone,
@@ -122,12 +125,14 @@ func assignEndpoints(receiveZone *endpointDeviation, endpointsAvailable *endpoin
 		sendZone := endpointsAvailable.byZone[index]
 		if sendZone.deviation == receiveZone.deviation {
 			sliceGroups[receiveZone.name].Composition[sendZone.name] = types.WeightedEndpoints{Number: sendZone.deviation, Weight: 1}
+			receiveZone.deviation = 0
 			endpointsAvailable.pop()
 			break
 		}
 		if sendZone.deviation > receiveZone.deviation {
 			sliceGroups[receiveZone.name].Composition[sendZone.name] = types.WeightedEndpoints{Number: receiveZone.deviation, Weight: 1}
 			endpointsAvailable.byZone[index].deviation -= receiveZone.deviation
+			receiveZone.deviation = 0
 			break
 		}
 		if sendZone.deviation < receiveZone.deviation {

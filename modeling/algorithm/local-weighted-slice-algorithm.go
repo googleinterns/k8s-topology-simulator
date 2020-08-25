@@ -47,7 +47,10 @@ func (alg LocalWeightedSliceAlgorithm) CreateSliceGroups(region types.RegionInfo
 	// weightedEndpointsNeeded stores zones with float number of endpoints
 	// needed
 	weightedEndpointsNeeded := endpointsList{}
-	for zoneName, zone := range region.ZoneDetails {
+	// traverse the map by name order
+	zoneNames := sortZoneByNames(region.ZoneDetails)
+	for _, zoneName := range zoneNames {
+		zone := region.ZoneDetails[zoneName]
 		var localGroup types.EndpointSliceGroup
 		localGroup.Label = zoneName
 		// this local sliceGroup should only receive traffic from current zone,
