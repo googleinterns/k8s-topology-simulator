@@ -1,7 +1,7 @@
 input name,score,in-zone-traffic score,deviation score,slice score,max deviation,mean deviation,SD of deviation
 2 zones with no endpoints,73.3333,33.3333,100.0000,100.0000,0.0000%,0.0000%,0.0000
 1 zone with no endpoints,79.6646,66.6667,99.1616,66.6667,1.0101%,0.6667%,0.0097
-2 zones with few endpoints,55.7143,42.8571,71.4286,50.0000,42.8571%,14.2857%,0.2474
+2 zones with few endpoints,61.4286,42.8571,85.7143,50.0000,14.2857%,14.2857%,0.2474
 balanced minimal endpoints,73.3333,33.3333,100.0000,100.0000,0.0000%,0.0000%,0.0000
 unbalanced minimal endpoints,73.3333,33.3333,100.0000,100.0000,0.0000%,0.0000%,0.0000
 only 1 endpoint,73.3333,33.3333,100.0000,100.0000,0.0000%,0.0000%,0.0000

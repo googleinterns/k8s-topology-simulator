@@ -20,7 +20,7 @@ else file=./data/range-input.csv
 fi
 
 if [ ! -f $file ]
-then echo "input file $file doesn't exist, please run ./data/range-input-generator.py first"; exit
+then echo "input file $file doesn't exist, please run ./hack/range-input-generator.py first"; exit
 fi
 
 for alg in ${algs[@]}; do

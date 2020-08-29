@@ -31,22 +31,21 @@ const inZoneTrafficScoreWeight, deviationScoreWeight, sliceScoreWeight = 0.4, 0.
 // generating output file
 func StartProcessing(inputFile string, outputFile string, alg string) error {
 
-	// initialize a goroutine to keep reading row data from input file and
-	// putting the converted row data into a queue
+	// initialize a goroutine to read row data from input file and put the
+	// converted row data into a queue
 	inputQueue, err := parseInput(inputFile)
 	if err != nil {
 		return err
 	}
 
-	// initialize a goroutine to keep processing row data from inputQueue and
-	// putting the processed data into another queue
+	// initialize a goroutine to process row data from inputQueue and put the
+	// processed data into another queue to handle results
 	outputQueue, err := startSimulation(alg, inputQueue)
 	if err != nil {
 		return err
 	}
 
-	// parse results from outputQueue and write to output file in the main
-	// thread which will end after all data has been processed
+	// parse results from outputQueue and write to output file
 	return parseResult(outputFile, outputQueue)
 }
 
@@ -82,9 +81,8 @@ func startSimulation(algName string, inputQueue <-chan inputData) (<-chan output
 		return nil, err
 	}
 	outputQueue := make(chan outputData)
-	// since we only have one goroutine working on the data processing, although
-	// the model is not thread safe, for simplicity we create the model outside
-	// the goroutine but use it inside the goroutine.
+	// Some simplifications here result in this code not being threadsafe.
+	// Do not use more than one goroutine to process this queue.
 	go func() {
 		defer close(outputQueue)
 

@@ -23,14 +23,14 @@ import (
 	"github.com/googleinterns/k8s-topology-simulator/modeling/types"
 )
 
-// SharedGlobalAlgorithmCore takes multiple zones as input and output
+// sharedGlobalAlgorithmCore takes multiple zones as input and output
 // EntpointSliceGroups composition based on their nodes and endpoints:
 // 1. EndpointSlices will be considered global by default
 // 2. Once the number of endpoints in a zone reaches a specified threshold,
 //	  zone-specific EndpointSlices will begin to be produced.
 // 3. Kube Proxy will consume zone specific EndpointSlices. And decide whether
 //    to consume the global EndpointSlice based on users input.
-type SharedGlobalAlgorithmCore struct {
+type sharedGlobalAlgorithmCore struct {
 	// Weight of global EndpointSliceGroup
 	globalWeight float64
 	// Threshold of global EndpointSliceGroup that if the total number of endpoints
@@ -40,7 +40,7 @@ type SharedGlobalAlgorithmCore struct {
 
 // CreateSliceGroups takes a region of zones as input and output
 // EndpointSliceGroups
-func (alg SharedGlobalAlgorithmCore) CreateSliceGroups(region types.RegionInfo, excludeContributor bool) (map[string]types.EndpointSliceGroup, error) {
+func (alg sharedGlobalAlgorithmCore) CreateSliceGroups(region types.RegionInfo, excludeContributor bool) (map[string]types.EndpointSliceGroup, error) {
 	if region.ZoneDetails == nil {
 		return nil, errors.New("can't create EndpointSlices without zones specified")
 	}

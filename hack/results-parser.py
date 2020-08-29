@@ -48,7 +48,7 @@ class metric:
             self.min_cases.append(name)
 
 # helper function helps calculate aggregate results of an algorithm
-def process_one_file(file_path, writer, alg_name):
+def process_one_file(file_path, writer, alg_name, detail_writer=None):
     file_path = file_path.strip()
     file_path = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "./{0}".format(file_path)))
     try:
@@ -90,8 +90,11 @@ def process_one_file(file_path, writer, alg_name):
             row_data['min slice score'] = "%.2f" % float(slice_score.min_value)
             row_data['max deviation %'] = "%.2f" % float(max_deviation.max_value) + '%'
             writer.writerow(row_data)
+            if max_deviation.max_value > 0 and detail_writer != None:
+                detail_writer.write(alg_name + " : ")
+                detail_writer.write("{0} max deviation cases : \n{1}\n".format(len(max_deviation.max_cases), max_deviation.max_cases))
     except Exception as err:
-        print(err, "move to the next file")
+        print(err, ", move to the next file")
 
 # ask user to specify file names for different algorithms
 def user_input_files(alg_output_files, alg_names):
@@ -124,17 +127,22 @@ def main():
     print("---"*10)
     print("processing files : {0}".format(alg_output_files))
 
-    output_path = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "./results.csv"))
+    output_dir = os.path.normpath(os.path.dirname(os.path.realpath(__file__)))
+    output_path = os.path.join(output_dir, "../data/results.csv")
     try:
         with open(output_path, mode='w') as csv_output:
             field_names = ['alg name', 'invalid cases', 'valid cases', 'mean total score', 'max total score', 'min total score', 'mean inzone score', 'max inzone score', 'min inzone score', 'mean deviation score', 'max deviation score', 'min deviation score', 'mean slice score', 'max slice score', 'min slice score', 'max deviation %']
             writer = csv.DictWriter(csv_output, fieldnames=field_names)
             writer.writeheader()
+            detail_writer = open(os.path.join(output_dir, "../data/details.out"), 'w')
             for index, alg_name in enumerate(alg_names):
-                process_one_file(alg_output_files[index], writer, alg_name)
+                process_one_file(alg_output_files[index], writer, alg_name, detail_writer)
                 print_progress_bar(index+1, len(alg_names), length=10)
+            detail_writer.close()
     except Exception as err:
         print(err)
+        if detail_writer != None:
+            detail_writer.close()
         sys.exit()
 
 if __name__ == "__main__":

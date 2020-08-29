@@ -36,6 +36,9 @@ def generate_one_section(writer,nodes=[30, 30, 30], ep_range=[0,101], step=1, su
     endpoints = list(combinations(range(ep_range[0], ep_range[1], step), len(nodes)))
     total = len(endpoints)
     for comb in endpoints:
+        # exclude cases where there are no endpoints at all
+        if comb == (0,) * len(comb):
+            continue
         row_data = dict()
         row_data[field_names[0]] = str(name) + suffix
         for index, ep in enumerate(comb):
@@ -45,7 +48,7 @@ def generate_one_section(writer,nodes=[30, 30, 30], ep_range=[0,101], step=1, su
         if bar:
             print_progress_bar(name, total, progress=section_name, length = 70)
 
-file_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "./range-input.csv"))
+file_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "../data/range-input.csv"))
 print("creating range input to :" + file_dir)
 with open(file_dir, mode='w') as csv_file:
     field_names = ['name', 'zone1', 'zone2', 'zone3']

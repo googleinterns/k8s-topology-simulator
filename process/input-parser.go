@@ -28,7 +28,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// paserInput parses an input csv file to instances of inputData and puts them
+// parseInput parses an input csv file to instances of inputData and puts them
 // into a queue(channel)
 func parseInput(file string) (<-chan inputData, error) {
 	inputFile, err := os.Open(filepath.Join("", filepath.Clean(file)))
