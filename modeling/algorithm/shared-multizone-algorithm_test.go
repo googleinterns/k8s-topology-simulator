@@ -216,7 +216,7 @@ func TestSharedMultiZoneAlgorithm(t *testing.T) {
 	localTest := routingAlgorithmTest{
 		algName: "SharedMultiZone",
 		alg: SharedMultiZoneAlgorithm{
-			sharedCoreAlgorithm: SharedGlobalAlgorithmCore{
+			sharedCoreAlgorithm: sharedGlobalAlgorithmCore{
 				globalWeight:    1,
 				globalThreshold: 100,
 			},

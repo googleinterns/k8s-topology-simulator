@@ -21,3 +21,10 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+
+# large files
+*range-output.csv
+*range-input.csv
+
+# python cache
+__pycache__

@@ -24,7 +24,7 @@ import (
 // consuming the global EndpointSliceGroup if a zone has contributed endpoints
 // to it.
 type SharedMultiZoneAlgorithm struct {
-	sharedCoreAlgorithm SharedGlobalAlgorithmCore
+	sharedCoreAlgorithm sharedGlobalAlgorithmCore
 }
 
 // CreateSliceGroups takes a region of zones as input and output

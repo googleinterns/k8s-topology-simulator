@@ -89,18 +89,23 @@ func (pq ZonePriorityQueue) Less(i, j int) bool {
 func (pq ZonePriorityQueue) less(i, j int) bool {
 	zoneA := pq.ZoneNames[i]
 	zoneB := pq.ZoneNames[j]
-	if pq.SliceGroups[zoneA].Composition[zoneA].Number == 0 {
+	if pq.SliceGroups[zoneA].NumberOfEndpoints() == 0 {
 		return false
 	}
-	if pq.SliceGroups[zoneB].Composition[zoneB].Number == 0 {
+	if pq.SliceGroups[zoneB].NumberOfEndpoints() == 0 {
 		return true
 	}
-	// If actual endpoints ratio of zoneA - nodes ratio of zoneA > actual
-	// endpoints ratio of zoneB - nodes ratio of zoneB, zoneA should be placed
-	// ahead of zoneB. Because after giving one endpoint out, zoneA should have
-	// less deviation compared to nodes ratio.
-	return float64(pq.SliceGroups[zoneA].NumberOfEndpoints())/float64(pq.Region.TotalEndpoints)-pq.Region.ZoneDetails[zoneA].NodesRatio >
-		float64(pq.SliceGroups[zoneB].NumberOfEndpoints())/float64(pq.Region.TotalEndpoints)-pq.Region.ZoneDetails[zoneB].NodesRatio
+	// If this queue is to receive endpoints, the zone with a higher traffic
+	// load deviation should be placed first, deviation = expectedEndpoints /
+	// actual endpoints = nodes ratio / actual endpoints
+	if pq.ReceiveEndpoint {
+		return pq.Region.ZoneDetails[zoneA].NodesRatio/float64(pq.SliceGroups[zoneA].NumberOfEndpoints()) <
+			pq.Region.ZoneDetails[zoneB].NodesRatio/float64(pq.SliceGroups[zoneB].NumberOfEndpoints())
+	}
+	// If this queue is to give out endpoints, the zone with a lowe traffic load
+	// after giving out one endpoint should be placed first
+	return pq.Region.ZoneDetails[zoneA].NodesRatio/float64(pq.SliceGroups[zoneA].NumberOfEndpoints()-1) <
+		pq.Region.ZoneDetails[zoneB].NodesRatio/float64(pq.SliceGroups[zoneB].NumberOfEndpoints()-1)
 }
 
 // Pop returns the first element in the queue and erases it

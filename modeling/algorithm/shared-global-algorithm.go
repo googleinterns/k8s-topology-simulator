@@ -23,7 +23,7 @@ import (
 // SharedGlobalAlgorithm works on SharedGlobalAlgorithmCore with consuming the
 // global EndpointSliceGroup.
 type SharedGlobalAlgorithm struct {
-	sharedCoreAlgorithm SharedGlobalAlgorithmCore
+	sharedCoreAlgorithm sharedGlobalAlgorithmCore
 }
 
 // CreateSliceGroups takes a region of zones as input and output

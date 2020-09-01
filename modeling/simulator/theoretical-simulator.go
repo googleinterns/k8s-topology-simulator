@@ -177,8 +177,8 @@ func getSimulationResult(zd zoneSGDetails, region types.RegionInfo, endpointSlic
 		var maxLabel string
 		for label, deviation := range zd[zoneName].endpointsTrafficLoadDeviation {
 			zoneDeviation += math.Abs(deviation) * float64(endpointSlices[label].Composition[zoneName].Number)
-			if math.Abs(deviation) > zoneMaxDeviation {
-				zoneMaxDeviation = math.Abs(deviation)
+			if deviation > zoneMaxDeviation {
+				zoneMaxDeviation = deviation
 				maxLabel = label
 			}
 		}

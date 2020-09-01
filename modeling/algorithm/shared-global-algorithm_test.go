@@ -218,7 +218,7 @@ func TestSharedGlobalAlgorithm(t *testing.T) {
 	localTest := routingAlgorithmTest{
 		algName: "SharedGlobal",
 		alg: SharedGlobalAlgorithm{
-			sharedCoreAlgorithm: SharedGlobalAlgorithmCore{
+			sharedCoreAlgorithm: sharedGlobalAlgorithmCore{
 				globalWeight:    0.4,
 				globalThreshold: 100,
 			},
