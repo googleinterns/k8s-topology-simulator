@@ -89,6 +89,7 @@ def process_one_file(file_path, writer, alg_name, detail_writer=None):
             row_data['max slice score'] = "%.2f" % float(slice_score.max_value)
             row_data['min slice score'] = "%.2f" % float(slice_score.min_value)
             row_data['max deviation %'] = "%.2f" % float(max_deviation.max_value) + '%'
+            row_data['average max deviation %'] = "%.2f" % float(max_deviation.value/valid_records) + '%'
             writer.writerow(row_data)
             if max_deviation.max_value > 0 and detail_writer != None:
                 detail_writer.write(alg_name + " : ")
@@ -121,7 +122,7 @@ def user_input_files(alg_output_files, alg_names):
 def main():
     alg_names = ['original', 'local', 'local-shared', 'local-weighted', 'local-opt', 'shared-global', 'shared-multizone']
     # default file names
-    alg_output_files = ['original-alg-output.csv', 'local-alg-output.csv', 'local-shared-alg-output.csv', 'local-weighted-alg-output.csv', 'local-opt-alg-output.csv', 'shared-global-alg-output.csv', 'shared-multizone-alg-output.csv']
+    alg_output_files = ['../data/Original-range-output.csv', '../data/Local-range-output.csv', '../data/LocalShared-range-output.csv', '../data/LocalWeighted-range-output.csv', '../data/LocalOpt-range-output.csv', '../data/SharedGlobal-range-output.csv', '../data/SharedMultiZone-range-output.csv']
     # interactively ask user for file names
     alg_output_files = user_input_files(alg_output_files, alg_names)
     print("---"*10)
@@ -131,7 +132,7 @@ def main():
     output_path = os.path.join(output_dir, "../data/results.csv")
     try:
         with open(output_path, mode='w') as csv_output:
-            field_names = ['alg name', 'invalid cases', 'valid cases', 'mean total score', 'max total score', 'min total score', 'mean inzone score', 'max inzone score', 'min inzone score', 'mean deviation score', 'max deviation score', 'min deviation score', 'mean slice score', 'max slice score', 'min slice score', 'max deviation %']
+            field_names = ['alg name', 'invalid cases', 'valid cases', 'mean total score', 'max total score', 'min total score', 'mean inzone score', 'max inzone score', 'min inzone score', 'mean deviation score', 'max deviation score', 'min deviation score', 'mean slice score', 'max slice score', 'min slice score', 'max deviation %', 'average max deviation %']
             writer = csv.DictWriter(csv_output, fieldnames=field_names)
             writer.writeheader()
             detail_writer = open(os.path.join(output_dir, "../data/details.out"), 'w')
