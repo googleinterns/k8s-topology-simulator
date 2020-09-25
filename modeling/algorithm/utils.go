@@ -136,3 +136,35 @@ func sortZoneByNames(zones map[string]types.Zone) []string {
 	sort.Strings(names)
 	return names
 }
+
+// assignEndpoints helps distribute endpoints from rich zones to poor zones in
+// local based algorithms
+func assignEndpoints(receiveZone *endpointDeviation, endpointsAvailable *endpointsList, sliceGroups map[string]types.EndpointSliceGroup) {
+	// traverse available zones to assign endpoints to receiving zone
+	for index := 0; index < len(endpointsAvailable.byZone); {
+		sendZone := endpointsAvailable.byZone[index]
+		// if extra endpoints from available zones == required endpoints from
+		// receiving zones, assign endpoints only
+		if sendZone.deviation == receiveZone.deviation {
+			sliceGroups[receiveZone.name].Composition[sendZone.name] = types.WeightedEndpoints{Number: sendZone.deviation, Weight: 1}
+			receiveZone.deviation = 0
+			endpointsAvailable.pop()
+			break
+		}
+		// if extra endpoints from available zones > required endpoints from
+		// receiving zones, assign endpoints and move to a new receiving zone
+		if sendZone.deviation > receiveZone.deviation {
+			sliceGroups[receiveZone.name].Composition[sendZone.name] = types.WeightedEndpoints{Number: receiveZone.deviation, Weight: 1}
+			endpointsAvailable.byZone[index].deviation -= receiveZone.deviation
+			receiveZone.deviation = 0
+			break
+		}
+		// if extra endpoints from available zones < required endpoints from
+		// receiving zones, assign endpoints and move to a new available zone
+		if sendZone.deviation < receiveZone.deviation {
+			sliceGroups[receiveZone.name].Composition[sendZone.name] = types.WeightedEndpoints{Number: sendZone.deviation, Weight: 1}
+			receiveZone.deviation -= sendZone.deviation
+			endpointsAvailable.pop()
+		}
+	}
+}

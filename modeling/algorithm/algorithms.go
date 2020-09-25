@@ -29,7 +29,7 @@ func NewAlgorithm(name string) RoutingAlgorithm {
 		return SharedMultiZoneAlgorithm{sharedCoreAlgorithm: sharedGlobalAlgorithmCore{globalWeight: 1, globalThreshold: 100}}
 	case "Local", "LocalAlgorithm":
 		klog.Info("LocalSliceAlgorithm created")
-		return LocalSliceAlgorithm{}
+		return LocalSliceAlgorithm{threshold: 0.5, startingThreshold: 3}
 	case "LocalWeighted", "LocalWeightedAlgorithm":
 		klog.Info("LocalWeightedSliceAlgorithm created")
 		return LocalWeightedSliceAlgorithm{}

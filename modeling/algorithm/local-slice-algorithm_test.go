@@ -25,6 +25,159 @@ import (
 func TestLocalAlgorithm(t *testing.T) {
 	testCases := []algTestCase{
 		{
+			name: "unbalanced nodes distribution",
+			input: []types.Zone{
+				types.Zone{
+					Nodes:     1,
+					Endpoints: 5,
+					Name:      "ZoneA",
+				},
+				types.Zone{
+					Nodes:     2,
+					Endpoints: 20,
+					Name:      "ZoneB",
+				},
+				types.Zone{
+					Nodes:     7,
+					Endpoints: 20,
+					Name:      "ZoneC",
+				},
+			},
+			expectedOutput: map[string]types.EndpointSliceGroup{
+				"ZoneA": types.EndpointSliceGroup{
+					Label: "ZoneA",
+					Composition: map[string]types.WeightedEndpoints{
+						"ZoneA": types.WeightedEndpoints{Number: 5, Weight: 1},
+					},
+					ZoneTrafficWeights: map[string]float64{
+						"ZoneA": 1,
+					},
+				},
+				"ZoneB": types.EndpointSliceGroup{
+					Label: "ZoneB",
+					Composition: map[string]types.WeightedEndpoints{
+						"ZoneB": types.WeightedEndpoints{Number: 9, Weight: 1},
+					},
+					ZoneTrafficWeights: map[string]float64{
+						"ZoneB": 1,
+					},
+				},
+				"ZoneC": types.EndpointSliceGroup{
+					Label: "ZoneC",
+					Composition: map[string]types.WeightedEndpoints{
+						"ZoneB": types.WeightedEndpoints{Number: 11, Weight: 1},
+						"ZoneC": types.WeightedEndpoints{Number: 20, Weight: 1},
+					},
+					ZoneTrafficWeights: map[string]float64{
+						"ZoneC": 1,
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "corner case : zero endpoints",
+			input: []types.Zone{
+				types.Zone{
+					Nodes:     1,
+					Endpoints: 0,
+					Name:      "ZoneA",
+				},
+				types.Zone{
+					Nodes:     1,
+					Endpoints: 6,
+					Name:      "ZoneB",
+				},
+				types.Zone{
+					Nodes:     1,
+					Endpoints: 7,
+					Name:      "ZoneC",
+				},
+			},
+			expectedOutput: map[string]types.EndpointSliceGroup{
+				"ZoneA": types.EndpointSliceGroup{
+					Label: "ZoneA",
+					Composition: map[string]types.WeightedEndpoints{
+						"ZoneB": types.WeightedEndpoints{Number: 1, Weight: 1},
+						"ZoneC": types.WeightedEndpoints{Number: 2, Weight: 1},
+					},
+					ZoneTrafficWeights: map[string]float64{
+						"ZoneA": 1,
+					},
+				},
+				"ZoneB": types.EndpointSliceGroup{
+					Label: "ZoneB",
+					Composition: map[string]types.WeightedEndpoints{
+						"ZoneB": types.WeightedEndpoints{Number: 5, Weight: 1},
+					},
+					ZoneTrafficWeights: map[string]float64{
+						"ZoneB": 1,
+					},
+				},
+				"ZoneC": types.EndpointSliceGroup{
+					Label: "ZoneC",
+					Composition: map[string]types.WeightedEndpoints{
+						"ZoneC": types.WeightedEndpoints{Number: 5, Weight: 1},
+					},
+					ZoneTrafficWeights: map[string]float64{
+						"ZoneC": 1,
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "corner case : give out more endpoints",
+			input: []types.Zone{
+				types.Zone{
+					Nodes:     16,
+					Endpoints: 5,
+					Name:      "ZoneA",
+				},
+				types.Zone{
+					Nodes:     8,
+					Endpoints: 1,
+					Name:      "ZoneB",
+				},
+				types.Zone{
+					Nodes:     1,
+					Endpoints: 0,
+					Name:      "ZoneC",
+				},
+			},
+			expectedOutput: map[string]types.EndpointSliceGroup{
+				"ZoneA": types.EndpointSliceGroup{
+					Label: "ZoneA",
+					Composition: map[string]types.WeightedEndpoints{
+						"ZoneA": types.WeightedEndpoints{Number: 3, Weight: 1},
+					},
+					ZoneTrafficWeights: map[string]float64{
+						"ZoneA": 1,
+					},
+				},
+				"ZoneB": types.EndpointSliceGroup{
+					Label: "ZoneB",
+					Composition: map[string]types.WeightedEndpoints{
+						"ZoneA": types.WeightedEndpoints{Number: 1, Weight: 1},
+						"ZoneB": types.WeightedEndpoints{Number: 1, Weight: 1},
+					},
+					ZoneTrafficWeights: map[string]float64{
+						"ZoneB": 1,
+					},
+				},
+				"ZoneC": types.EndpointSliceGroup{
+					Label: "ZoneC",
+					Composition: map[string]types.WeightedEndpoints{
+						"ZoneA": types.WeightedEndpoints{Number: 1, Weight: 1},
+					},
+					ZoneTrafficWeights: map[string]float64{
+						"ZoneC": 1,
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
 			name: "2 zones with no endpoints",
 			input: []types.Zone{
 				types.Zone{
@@ -94,26 +247,14 @@ func TestLocalAlgorithm(t *testing.T) {
 				},
 			},
 			expectedOutput: map[string]types.EndpointSliceGroup{
-				"ZoneA": types.EndpointSliceGroup{
-					Label: "ZoneA",
+				"global": types.EndpointSliceGroup{
+					Label: "global",
 					Composition: map[string]types.WeightedEndpoints{
 						"ZoneA": types.WeightedEndpoints{Number: 1, Weight: 1},
 					},
 					ZoneTrafficWeights: map[string]float64{
 						"ZoneA": 1,
-					},
-				},
-				"ZoneB": types.EndpointSliceGroup{
-					Label:       "ZoneB",
-					Composition: map[string]types.WeightedEndpoints{},
-					ZoneTrafficWeights: map[string]float64{
 						"ZoneB": 1,
-					},
-				},
-				"ZoneC": types.EndpointSliceGroup{
-					Label:       "ZoneC",
-					Composition: map[string]types.WeightedEndpoints{},
-					ZoneTrafficWeights: map[string]float64{
 						"ZoneC": 1,
 					},
 				},
@@ -173,7 +314,7 @@ func TestLocalAlgorithm(t *testing.T) {
 	}
 	localTest := routingAlgorithmTest{
 		algName:   "LocalSlice",
-		alg:       LocalSliceAlgorithm{},
+		alg:       LocalSliceAlgorithm{threshold: 0.5},
 		testCases: testCases,
 	}
 	localTest.doTest(t)

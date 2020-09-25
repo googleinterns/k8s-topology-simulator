@@ -123,7 +123,7 @@ func (alg LocalSharedSliceAlgorithm) CreateSliceGroups(region types.RegionInfo) 
 		return nil, err
 	}
 	if !succ {
-		klog.Infof("failed to use local shared algorithm, switching to shared global algorithm %+v \n", region)
+		klog.Infof("failed to use local shared algorithm, switching to original algorithm %+v \n", region)
 		return OriginalAlgorithm{}.CreateSliceGroups(region)
 	}
 	return sliceGroups, nil
@@ -245,7 +245,7 @@ func getEndpointsDeviation(region types.RegionInfo, sliceGroups map[string]types
 	if !ok {
 		return 0.0, false
 	}
-	return float64(sliceGroup.Composition[zone].Number) - expectedEndpoints, true
+	return float64(sliceGroup.NumberOfEndpoints()) - expectedEndpoints, true
 }
 
 // helper function to update composition in ESG
